@@ -138,30 +138,72 @@ class Ui_Dialog(object):
 
     def set_user_info(self, api_url, username):
         """设置用户信息"""
-        self.api_url = api_url  # 去掉 self.ui. 直接使用 self
+        self.api_url = api_url
         self.username = username
         self.load_clipboard_records()  # 自动加载数据
 
     def add_clipboard_item(self, record):
         """添加剪贴板记录项（带滚动条和操作按钮）"""
         item = QtWidgets.QListWidgetItem()
-        item.setSizeHint(QtCore.QSize(600, 100))
+        # 增加高度以容纳设备信息
+        item.setSizeHint(QtCore.QSize(600, 120))
         item.setData(QtCore.Qt.UserRole, record)  # 设置记录数据
 
         widget = QtWidgets.QWidget()
         widget.setStyleSheet("background-color: transparent;")
-        layout = QtWidgets.QHBoxLayout(widget)
+        layout = QtWidgets.QVBoxLayout(widget)
         layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(10)
+        layout.setSpacing(5)
 
-        # --- 左侧：可滚动的内容区域 ---
+        # --- 设备信息行 ---
+        device_info_layout = QtWidgets.QHBoxLayout()
+
+        # 设备图标
+        icon_label = QtWidgets.QLabel()
+        icon = QtGui.QIcon(":/icons/device_icon.png")  # 如果有资源文件
+        pixmap = icon.pixmap(24, 24) if not icon.isNull() else QtGui.QPixmap(24, 24)
+        pixmap.fill(QtGui.QColor("#2196F3"))
+        icon_label.setPixmap(pixmap)
+        icon_label.setStyleSheet("border-radius: 12px;")
+        device_info_layout.addWidget(icon_label)
+
+        # 设备标签
+        device_label = QtWidgets.QLabel(f"来自: {record.get('device_label', '未知设备')}")
+        device_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #666;
+                font-weight: bold;
+            }
+        """)
+        device_info_layout.addWidget(device_label)
+
+        # 时间标签
+        timestamp = record.get('timestamp', '')
+        if timestamp:
+            time_label = QtWidgets.QLabel(f"时间: {timestamp}")
+            time_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    color: #888;
+                }
+            """)
+            device_info_layout.addWidget(time_label)
+
+        device_info_layout.addStretch(1)  # 添加伸缩因子使设备信息靠左
+        layout.addLayout(device_info_layout)
+
+        # --- 内容区域 ---
+        content_layout = QtWidgets.QHBoxLayout()
+
+        # 可滚动的内容区域
         scroll_area = QtWidgets.QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("border: none;")
 
         content_widget = QtWidgets.QWidget()
         content_widget.setStyleSheet("background-color: transparent;")
-        content_layout = QtWidgets.QVBoxLayout(content_widget)
+        content_widget_layout = QtWidgets.QVBoxLayout(content_widget)
 
         content_label = QtWidgets.QLabel(record.get('content', '无内容'))
         content_label.setWordWrap(True)
@@ -172,9 +214,9 @@ class Ui_Dialog(object):
                 padding: 5px;
             }
         """)
-        content_layout.addWidget(content_label)
+        content_widget_layout.addWidget(content_label)
         scroll_area.setWidget(content_widget)
-        layout.addWidget(scroll_area, 1)
+        content_layout.addWidget(scroll_area, 1)
 
         # --- 右侧：操作按钮 ---
         btn_layout = QtWidgets.QVBoxLayout()
@@ -214,7 +256,9 @@ class Ui_Dialog(object):
         delete_btn.clicked.connect(lambda: self.confirm_remove_record(item))
         btn_layout.addWidget(delete_btn)
 
-        layout.addLayout(btn_layout)
+        content_layout.addLayout(btn_layout)
+        layout.addLayout(content_layout)
+
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
 
@@ -223,19 +267,19 @@ class Ui_Dialog(object):
         clipboard = QtWidgets.QApplication.clipboard()
         clipboard.setText(content)
 
-        # 修复后的正确调用方式
+        # 显示复制成功提示
         QtWidgets.QToolTip.showText(
-            QtGui.QCursor.pos(),  # 鼠标当前位置
-            "已复制到剪贴板",  # 提示文本
-            self.listWidget,  # 父控件（使用列表控件）
-            QtCore.QRect(),  # 显示区域（空矩形表示默认位置）
-            2000  # 显示时间（毫秒）
+            QtGui.QCursor.pos(),
+            "已复制到剪贴板",
+            self.listWidget,
+            QtCore.QRect(),
+            2000
         )
 
     def confirm_remove_record(self, item):
         """确认删除记录"""
         record = item.data(QtCore.Qt.UserRole)
-        if not record:  # 添加检查
+        if not record:
             QtWidgets.QMessageBox.warning(None, "错误", "无法获取记录数据")
             return
 
@@ -256,7 +300,7 @@ class Ui_Dialog(object):
     def remove_record_item(self, item):
         """删除记录项"""
         record = item.data(QtCore.Qt.UserRole)
-        if not record:  # 添加检查
+        if not record:
             QtWidgets.QMessageBox.warning(None, "错误", "无法获取记录数据")
             return
 
@@ -279,15 +323,11 @@ class Ui_Dialog(object):
         except Exception as e:
             QtWidgets.QMessageBox.critical(None, "错误", f"删除记录时出错: {str(e)}")
 
-
-
-
-
     def retranslateUi(self, ClipboardDialog):
         _translate = QtCore.QCoreApplication.translate
         ClipboardDialog.setWindowTitle(_translate("ClipboardDialog", "剪贴板历史"))
         self.label.setText(_translate("ClipboardDialog", "剪贴板历史记录"))
-        self.syncButton.setText(_translate("ClipboardDialog", "同步剪贴板"))  # 更新按钮文本
+        self.syncButton.setText(_translate("ClipboardDialog", "同步剪贴板"))
 
     def show_no_records_message(self):
         """显示无记录的提示"""
@@ -306,75 +346,61 @@ class Ui_Dialog(object):
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
 
+
 class ClipboardDialog(QtWidgets.QDialog):
-        def __init__(self, parent=None):
-            super().__init__(parent)
-            self.ui = Ui_Dialog()
-            self.ui.setupUi(self)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.ui = Ui_Dialog()
+        self.ui.setupUi(self)
 
-            # 设置默认值（登录后会覆盖）
-            self.ui.api_url = "http://localhost:8000"
-            self.ui.username = "testuser"
+        # 设置默认值（登录后会覆盖）
+        self.ui.api_url = "http://localhost:8000"
+        self.ui.username = "testuser"
 
-            # 绑定同步按钮事件
-            self.ui.syncButton.clicked.connect(self.load_clipboard_records)
+        # 绑定同步按钮事件
+        self.ui.syncButton.clicked.connect(self.load_clipboard_records)
 
-            # 初始加载数据
-            self.load_clipboard_records()
+        # 初始加载数据
+        self.load_clipboard_records()
 
-        def set_user_info(self, api_url, username):
-            """设置用户信息（登录后调用）"""
-            self.ui.api_url = api_url
-            self.ui.username = username
-            self.load_clipboard_records()  # 登录后自动刷新
+    def set_user_info(self, api_url, username):
+        """设置用户信息（登录后调用）"""
+        self.ui.api_url = api_url
+        self.ui.username = username
+        self.load_clipboard_records()  # 登录后自动刷新
 
-        def load_clipboard_records(self):
-            """从服务器加载剪贴板记录（点击同步按钮时触发）"""
-            try:
-                # 获取设备信息
-                devices_response = requests.get(f"{self.ui.api_url}/get_devices?username={self.ui.username}")
-                devices_result = devices_response.json()
+    def load_clipboard_records(self):
+        """从服务器加载剪贴板记录（点击同步按钮时触发）"""
+        try:
+            # 获取设备信息
+            devices_response = requests.get(f"{self.ui.api_url}/get_devices?username={self.ui.username}")
+            devices_result = devices_response.json()
 
-                if devices_response.status_code != 200 or not devices_result.get("success"):
-                    QtWidgets.QMessageBox.warning(self, "警告", "获取设备信息失败")
-                    return
+            if devices_response.status_code != 200 or not devices_result.get("success"):
+                QtWidgets.QMessageBox.warning(self, "警告", "获取设备信息失败")
+                return
 
-                device_map = {d['device_id']: d['label'] for d in devices_result.get("devices", [])}
+            device_map = {d['device_id']: d['label'] for d in devices_result.get("devices", [])}
 
-                # 获取剪贴板记录
-                response = requests.get(f"{self.ui.api_url}/get_clipboards?username={self.ui.username}")
-                result = response.json()
+            # 获取剪贴板记录
+            response = requests.get(f"{self.ui.api_url}/get_clipboards?username={self.ui.username}")
+            result = response.json()
 
-                if response.status_code == 200 and result.get("success"):
-                    records = result.get("clipboards", [])
-                    self.ui.listWidget.clear()
+            if response.status_code == 200 and result.get("success"):
+                records = result.get("clipboards", [])
+                self.ui.listWidget.clear()
 
-                    if not records:
-                        self.ui.show_no_records_message()
-                    else:
-                        for record in records:
-                            record['device_label'] = device_map.get(record.get('device_id'), '未知设备')
-                            self.ui.add_clipboard_item(record)
+                if not records:
+                    self.ui.show_no_records_message()
                 else:
-                    QtWidgets.QMessageBox.warning(self, "错误", result.get("message", "获取剪贴板记录失败"))
+                    for record in records:
+                        # 添加设备标签信息
+                        record['device_label'] = device_map.get(record.get('device_id'), '未知设备')
+                        self.ui.add_clipboard_item(record)
+            else:
+                QtWidgets.QMessageBox.warning(self, "错误", result.get("message", "获取剪贴板记录失败"))
 
-            except requests.exceptions.ConnectionError:
-                QtWidgets.QMessageBox.critical(self, "连接错误", "无法连接到服务器，请检查网络连接")
-            except Exception as e:
-                QtWidgets.QMessageBox.critical(self, "错误", f"加载剪贴板记录失败: {str(e)}")
-
-        def show_no_records_message(self):
-            """显示无记录提示"""
-            item = QtWidgets.QListWidgetItem()
-            item.setSizeHint(QtCore.QSize(200, 60))
-            widget = QtWidgets.QWidget()
-            widget.setStyleSheet("background-color: transparent;")
-            layout = QtWidgets.QHBoxLayout(widget)
-            label = QtWidgets.QLabel("暂无剪贴板记录")
-            label.setAlignment(QtCore.Qt.AlignCenter)
-            label.setStyleSheet("color: #999; font-size: 14px;")
-            layout.addWidget(label)
-            self.listWidget.addItem(item)
-            self.listWidget.setItemWidget(item, widget)
-
-
+        except requests.exceptions.ConnectionError:
+            QtWidgets.QMessageBox.critical(self, "连接错误", "无法连接到服务器，请检查网络连接")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "错误", f"加载剪贴板记录失败: {str(e)}")
