@@ -176,14 +176,23 @@ class Ui_DeviceDialog(object):
                 if result.get("success"):
                     row = self.listWidget.row(item)
                     self.listWidget.takeItem(row)
-                    print(f"设备 {device_info.get('device_id')} 删除成功")
+
+                    # 显示删除的剪贴板记录数量
+                    removed_count = result.get("removed_clip_count", 0)
+                    if removed_count > 0:
+                        QtWidgets.QMessageBox.information(
+                            None,
+                            "删除成功",
+                            f"设备删除成功，同时删除了{removed_count}条相关剪贴板记录"
+                        )
+                    else:
+                        QtWidgets.QMessageBox.information(None, "成功", "设备删除成功")
                 else:
                     QtWidgets.QMessageBox.warning(None, "错误", result.get("message", "删除设备失败"))
             else:
                 QtWidgets.QMessageBox.warning(None, "错误", "删除设备失败")
         except Exception as e:
             QtWidgets.QMessageBox.critical(None, "错误", f"删除设备时出错: {str(e)}")
-            print(f"删除设备错误: {str(e)}")
 
     def retranslateUi(self, DeviceDialog):
         _translate = QtCore.QCoreApplication.translate
