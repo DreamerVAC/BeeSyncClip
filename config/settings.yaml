@@ -1,0 +1,89 @@
+# BeeSyncClip 配置文件
+
+# Redis 配置
+redis:
+  host: "localhost"
+  port: 6379
+  password: null
+  db: 0
+  decode_responses: true
+  socket_timeout: 5
+  retry_on_timeout: true
+
+# WebSocket 服务器配置
+websocket:
+  host: "localhost"
+  port: 8765
+  max_connections: 100
+  ping_interval: 20
+  ping_timeout: 10
+
+# HTTP API 服务器配置
+api:
+  host: "localhost"
+  port: 8000
+  debug: false
+  reload: false
+
+# 剪切板同步配置
+clipboard:
+  # 监控间隔（秒）
+  monitor_interval: 0.5
+  # 历史记录最大数量
+  max_history: 1000
+  # 数据过期时间（秒）
+  expire_time: 86400  # 24小时
+  # 支持的数据类型
+  supported_types:
+    - "text"
+    - "image"
+    - "file"
+  # 最大数据大小（字节）
+  max_data_size: 10485760  # 10MB
+
+# 安全配置
+security:
+  # 是否启用认证
+  enable_auth: true
+  # JWT密钥（生产环境请修改）
+  secret_key: "BeeSyncClip-2024-Secret-Key-Change-In-Production"
+  # Token过期时间（秒）
+  access_token_expire: 3600  # 1小时
+  # 允许的设备数量
+  max_devices: 5
+
+# 用户界面配置
+ui:
+  # 主题
+  theme: "auto"  # auto, light, dark
+  # 语言
+  language: "zh-CN"  # zh-CN, en-US
+  # 窗口配置
+  window:
+    width: 800
+    height: 600
+    min_width: 400
+    min_height: 300
+    # 启动时最小化到系统托盘
+    start_minimized: false
+    # 关闭到系统托盘
+    close_to_tray: true
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file_enabled: true
+  file_path: "logs/beesyncclip.log"
+  file_rotation: "10 MB"
+  file_retention: "30 days"
+  console_enabled: true
+
+# 应用配置
+app:
+  name: "BeeSyncClip"
+  version: "1.0.0"
+  author: "BeeSyncClip Team"
+  # 自动启动
+  auto_start: false
+  # 更新检查
+  check_updates: true 

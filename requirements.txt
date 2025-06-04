@@ -1,0 +1,39 @@
+# GUI框架
+PyQt6==6.6.1
+PyQt6-tools==6.4.2.3.3
+
+# 剪切板操作
+pyperclip==1.8.2
+
+# Web框架和WebSocket
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+websockets==15.0.1
+
+# Redis客户端
+redis==6.2.0
+
+# 其他工具库
+pydantic==2.11.5
+python-multipart==0.0.20
+aiofiles==24.1.0
+python-dotenv==1.1.0
+cryptography==45.0.3
+
+# 日志和配置
+loguru==0.7.3
+pyyaml==6.0.2
+
+# 系统工具
+psutil==7.0.0
+platformdirs==4.3.8
+
+# JWT认证
+PyJWT==2.10.1
+passlib[bcrypt]==1.7.4
+
+# 图像处理
+Pillow==11.2.1
+
+# 文件处理
+python-magic==0.4.27 

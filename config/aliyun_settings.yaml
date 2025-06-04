@@ -1,0 +1,108 @@
+# BeeSyncClip 阿里云部署配置
+app:
+  name: "BeeSyncClip"
+  version: "1.0.0"
+  environment: "production"
+
+# Redis 配置 (阿里云Redis实例或自建Redis)
+redis:
+  host: "localhost"  # 请修改为实际的Redis服务器地址
+  port: 6379
+  db: 0
+  password: ""  # 如使用阿里云Redis，请填入密码
+  decode_responses: true
+  connection_pool:
+    max_connections: 50
+    retry_on_timeout: true
+  cluster:
+    enabled: false  # 如使用Redis集群，设为true
+
+# WebSocket 服务器配置
+websocket:
+  host: "0.0.0.0"  # 监听所有接口
+  port: 8765
+  ping_interval: 20  # 心跳间隔（秒）
+  ping_timeout: 10   # 心跳超时（秒）
+  max_connections: 1000  # 最大连接数
+  
+# HTTP API 服务器配置
+api:
+  host: "0.0.0.0"  # 监听所有接口
+  port: 8000
+  cors_origins:
+    - "*"  # 生产环境应限制为特定域名
+  max_request_size: 10485760  # 10MB
+
+# 剪切板配置
+clipboard:
+  monitor_interval: 1.0  # 监控间隔（秒）
+  history_limit: 1000    # 历史记录限制
+  max_data_size: 10485760  # 最大数据大小 (10MB)
+  cleanup_interval: 3600   # 清理间隔（秒）
+  retention_days: 30       # 数据保留天数
+  supported_types:
+    - "text"
+    - "image"
+    - "file"
+  auto_cleanup: true
+
+# 安全配置
+security:
+  secret_key: "your-super-secret-key-change-this-in-production"  # 请修改为随机密钥
+  access_token_expire: 86400  # 24小时（秒）
+  max_login_attempts: 5
+  login_cooldown: 300  # 5分钟（秒）
+  encryption:
+    enabled: true
+    algorithm: "AES-256-GCM"
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
+
+# 日志配置
+logging:
+  level: "INFO"
+  file_path: "/var/log/beesyncclip/app.log"  # 阿里云建议路径
+  file_rotation: "50 MB"
+  file_retention: "30 days"
+  max_files: 10
+  console_output: false  # 生产环境关闭控制台输出
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+
+# 性能监控配置
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  health_check_interval: 30
+  performance_tracking: true
+  error_reporting: true
+
+# 阿里云特定配置
+aliyun:
+  region: "cn-hangzhou"  # 请修改为实际区域
+  # 如使用阿里云Redis
+  redis_instance_id: ""  # Redis实例ID
+  # 如使用阿里云OSS存储大文件
+  oss:
+    enabled: false
+    bucket_name: ""
+    access_key_id: ""
+    access_key_secret: ""
+    endpoint: ""
+  # 负载均衡配置
+  slb:
+    enabled: false
+    health_check_path: "/health"
+    
+# 防火墙和安全组配置提示
+# 需要开放的端口：
+# - 8000 (HTTP API)  
+# - 8765 (WebSocket)
+# - 6379 (Redis, 如果使用自建Redis)
+
+# 推荐的阿里云ECS配置：
+# - CPU: 2核以上
+# - 内存: 4GB以上  
+# - 磁盘: SSD 40GB以上
+# - 网络: 带宽5Mbps以上 
