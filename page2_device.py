@@ -6,43 +6,32 @@ import json
 
 
 class Ui_DeviceDialog(object):
-    def setupUi(self, DeviceDialog):
-        DeviceDialog.setObjectName("DeviceDialog")
-        DeviceDialog.resize(600, 400)  # 适当减小窗口尺寸
-        DeviceDialog.setStyleSheet("""
+    def setupUi(self, ClipboardDialog):
+        ClipboardDialog.setObjectName("ClipboardDialog")
+        ClipboardDialog.resize(800, 600)
+        ClipboardDialog.setStyleSheet("""
             QDialog {
                 background-color: #f5f5f5;
             }
-        """)
-
-        # 主垂直布局
-        self.verticalLayout = QtWidgets.QVBoxLayout(DeviceDialog)
-        self.verticalLayout.setContentsMargins(15, 15, 15, 15)
-        self.verticalLayout.setSpacing(10)
-        self.verticalLayout.setObjectName("verticalLayout")
-
-        # 标题标签
-        self.label = QtWidgets.QLabel(DeviceDialog)
-        self.label.setAlignment(QtCore.Qt.AlignCenter)
-        font = QtGui.QFont()
-        font.setPointSize(16)
-        font.setWeight(QtGui.QFont.Bold)
-        self.label.setFont(font)
-        self.label.setStyleSheet("color: #333;")
-        self.label.setObjectName("label")
-        self.verticalLayout.addWidget(self.label)
-
-        # 添加分割线
-        self.line = QtWidgets.QFrame()
-        self.line.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.line.setStyleSheet("color: #ddd;")
-        self.verticalLayout.addWidget(self.line)
-
-        # 设备列表
-        self.listWidget = QtWidgets.QListWidget(DeviceDialog)
-        self.listWidget.setObjectName("listWidget")
-        self.listWidget.setStyleSheet("""
+            QLabel {
+                font-family: 'Microsoft YaHei';
+                color: #333;
+            }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-family: 'Microsoft YaHei';
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
             QListWidget {
                 background-color: white;
                 border: 1px solid #ddd;
@@ -61,11 +50,80 @@ class Ui_DeviceDialog(object):
                 color: black;
             }
         """)
+
+        # 主垂直布局
+        self.verticalLayout = QtWidgets.QVBoxLayout(ClipboardDialog)
+        self.verticalLayout.setContentsMargins(15, 15, 15, 15)
+        self.verticalLayout.setSpacing(10)
+        self.verticalLayout.setObjectName("verticalLayout")
+
+        # 标题标签
+        self.label = QtWidgets.QLabel(ClipboardDialog)
+        self.label.setAlignment(QtCore.Qt.AlignCenter)
+        font = QtGui.QFont()
+        font.setPointSize(16)
+        font.setWeight(QtGui.QFont.Bold)
+        self.label.setFont(font)
+        self.label.setStyleSheet("color: #333;")
+        self.label.setObjectName("label")
+        self.verticalLayout.addWidget(self.label)
+
+        # 添加分割线
+        self.line = QtWidgets.QFrame()
+        self.line.setFrameShape(QtWidgets.QFrame.HLine)
+        self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.line.setStyleSheet("color: #ddd;")
+        self.verticalLayout.addWidget(self.line)
+
+        # 剪贴板记录列表
+        self.listWidget = QtWidgets.QListWidget(ClipboardDialog)
+        self.listWidget.setObjectName("listWidget")
+        self.listWidget.setStyleSheet("""
+            QListWidget {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+            }
+            QListWidget::item {
+                border-bottom: 1px solid #f0f0f0;
+            }
+            QListWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QScrollArea {
+                border: none;
+            }
+        """)
         self.verticalLayout.addWidget(self.listWidget)
 
-        self.retranslateUi(DeviceDialog)
-        QtCore.QMetaObject.connectSlotsByName(DeviceDialog)
+        # 状态标签
+        self.statusLabel = QtWidgets.QLabel(ClipboardDialog)
+        self.statusLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.statusLabel.setStyleSheet("color: #666; font-size: 12px;")
+        self.statusLabel.setObjectName("statusLabel")
+        self.verticalLayout.addWidget(self.statusLabel)
 
+        # 同步按钮
+        self.syncButton = QtWidgets.QPushButton(ClipboardDialog)
+        self.syncButton.setObjectName("syncButton")
+        self.syncButton.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        self.verticalLayout.addWidget(self.syncButton)
+
+        self.retranslateUi(ClipboardDialog)
+        QtCore.QMetaObject.connectSlotsByName(ClipboardDialog)
     def add_device_item(self, device_info, is_current_device=False):
         """添加设备项 - 简化版本"""
         item = QtWidgets.QListWidgetItem()
