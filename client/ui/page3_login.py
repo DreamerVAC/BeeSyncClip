@@ -107,8 +107,8 @@ class LoginDialog(QtWidgets.QDialog):
         self.ui = Ui_LoginDialog()
         self.ui.setupUi(self)
 
-        # 模拟后端API地址
-        self.api_url = "http://localhost:8000"
+        # API配置
+        self.api_url = "http://47.110.154.99:8000"
         self.current_username = ""  # 存储当前登录的用户名
         self.devices = []  # 存储当前用户的设备列表
 

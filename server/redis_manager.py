@@ -234,6 +234,213 @@ class RedisManager:
         except Exception as e:
             logger.error(f"获取在线设备列表失败: {e}")
             return []
+    
+    def get_user_by_username(self, username: str) -> Optional[dict]:
+        """根据用户名获取用户信息"""
+        try:
+            if not self.is_connected():
+                return None
+            
+            user_key = f"user:{username}"
+            user_data = self.redis_client.hgetall(user_key)
+            
+            if not user_data:
+                return None
+            
+            return {
+                'id': user_data.get('id'),
+                'username': username,
+                'created_at': user_data.get('created_at')
+            }
+            
+        except Exception as e:
+            logger.error(f"根据用户名获取用户失败: {e}")
+            return None
+    
+    def get_total_users_count(self) -> int:
+        """获取用户总数"""
+        try:
+            if not self.is_connected():
+                return 0
+            
+            # 统计所有user:*键的数量
+            user_keys = self.redis_client.keys("user:*")
+            return len(user_keys)
+            
+        except Exception as e:
+            logger.error(f"获取用户总数失败: {e}")
+            return 0
+    
+    def get_user_devices(self, user_id: str) -> List[dict]:
+        """获取用户设备列表"""
+        try:
+            if not self.is_connected():
+                return []
+            
+            devices_key = f"devices:{user_id}"
+            device_ids = self.redis_client.smembers(devices_key)
+            
+            devices = []
+            for device_id in device_ids:
+                device_key = f"device:{device_id}"
+                device_data = self.redis_client.hgetall(device_key)
+                
+                if device_data:
+                    # 转换时间字段
+                    from datetime import datetime
+                    device_info = {
+                        'device_id': device_id,
+                        'name': device_data.get('name', 'Unknown Device'),
+                        'os_info': device_data.get('os_info', 'Unknown'),
+                        'ip_address': device_data.get('ip_address', '0.0.0.0'),
+                        'created_at': datetime.fromisoformat(device_data.get('created_at', datetime.now().isoformat())),
+                        'last_seen': datetime.fromisoformat(device_data.get('last_seen', datetime.now().isoformat()))
+                    }
+                    devices.append(device_info)
+            
+            return devices
+            
+        except Exception as e:
+            logger.error(f"获取用户设备列表失败: {e}")
+            return []
+    
+    def update_device_name(self, device_id: str, new_name: str) -> bool:
+        """更新设备名称"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            device_key = f"device:{device_id}"
+            
+            # 检查设备是否存在
+            if not self.redis_client.exists(device_key):
+                return False
+            
+            # 更新设备名称
+            self.redis_client.hset(device_key, "name", new_name)
+            
+            logger.debug(f"更新设备名称成功: {device_id} -> {new_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"更新设备名称失败: {e}")
+            return False
+    
+    def remove_device(self, device_id: str) -> bool:
+        """删除设备"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            device_key = f"device:{device_id}"
+            
+            # 获取设备所属用户
+            device_data = self.redis_client.hgetall(device_key)
+            if not device_data:
+                return False
+            
+            user_id = device_data.get('user_id')
+            if user_id:
+                # 从用户设备集合中删除
+                devices_key = f"devices:{user_id}"
+                self.redis_client.srem(devices_key, device_id)
+            
+            # 删除设备信息
+            self.redis_client.delete(device_key)
+            
+            logger.debug(f"删除设备成功: {device_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"删除设备失败: {e}")
+            return False
+    
+    def delete_device_clipboard_items(self, device_id: str) -> int:
+        """删除指定设备的所有剪贴板项"""
+        try:
+            if not self.is_connected():
+                return 0
+            
+            deleted_count = 0
+            
+            # 查找所有剪贴板项
+            item_keys = self.redis_client.keys("item:*")
+            
+            for item_key in item_keys:
+                item_data = self.redis_client.hgetall(item_key)
+                if item_data.get('device_id') == device_id:
+                    # 从用户的剪贴板历史中删除
+                    user_id = item_data.get('user_id')
+                    if user_id:
+                        item_id = item_key.split(':')[1]
+                        user_key = f"clipboard:{user_id}"
+                        self.redis_client.zrem(user_key, item_id)
+                    
+                    # 删除项目数据
+                    self.redis_client.delete(item_key)
+                    deleted_count += 1
+            
+            logger.debug(f"删除设备剪贴板项: {device_id}, 数量: {deleted_count}")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"删除设备剪贴板项失败: {e}")
+            return 0
+    
+    def clear_user_clipboard_history(self, user_id: str) -> bool:
+        """清空用户所有剪贴板历史"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            user_key = f"clipboard:{user_id}"
+            
+            # 获取所有剪贴板项ID
+            item_ids = self.redis_client.zrange(user_key, 0, -1)
+            
+            # 删除所有剪贴板项数据
+            for item_id in item_ids:
+                item_key = f"item:{item_id}"
+                self.redis_client.delete(item_key)
+            
+            # 清空用户的剪贴板有序集合
+            self.redis_client.delete(user_key)
+            
+            logger.debug(f"清空用户剪贴板历史: {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"清空用户剪贴板历史失败: {e}")
+            return False
+    
+    def delete_clipboard_item(self, item_id: str) -> bool:
+        """删除指定的剪切板项（重载版本，不需要user_id）"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            item_key = f"item:{item_id}"
+            
+            # 获取项目数据以找到用户ID
+            item_data = self.redis_client.hgetall(item_key)
+            if not item_data:
+                return False
+            
+            user_id = item_data.get('user_id')
+            if user_id:
+                # 从用户的有序集合中删除
+                user_key = f"clipboard:{user_id}"
+                self.redis_client.zrem(user_key, item_id)
+            
+            # 删除具体的项目数据
+            self.redis_client.delete(item_key)
+            
+            logger.debug(f"删除剪切板项成功: {item_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"删除剪切板项失败: {e}")
+            return False
 
 
 # 全局 Redis 管理器实例
