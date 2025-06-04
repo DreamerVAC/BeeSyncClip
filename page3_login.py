@@ -151,7 +151,7 @@ class LoginDialog(QtWidgets.QDialog):
             "os_version": os_version,
             "ip_address": ip_address,
             "mac_address": mac,
-            "label": f"{hostname} ({os_info})"  # 默认设备标签
+            "label": f"{hostname} ({os_info})"  # 确保包含label字段
         }
 
     def handle_login(self):
