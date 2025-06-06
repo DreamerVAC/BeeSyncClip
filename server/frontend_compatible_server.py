@@ -11,10 +11,11 @@ from typing import Dict, List, Any, Optional
 import time
 import uuid
 from loguru import logger
+from datetime import datetime
 
 from server.auth import auth_manager
 from server.redis_manager import redis_manager
-from shared.models import ClipboardItem, Device, User
+from shared.models import ClipboardItem, Device, User, ClipboardType
 from shared.utils import get_device_info
 
 
@@ -88,6 +89,56 @@ def error_response(message: str, status_code: int = 400) -> JSONResponse:
         },
         status_code=status_code
     )
+
+
+@app.get("/")
+async def root():
+    """根路径 - 返回API信息"""
+    return {
+        "service": "BeeSyncClip API Server",
+        "version": "1.0.0",
+        "status": "running",
+        "message": "BeeSyncClip 跨平台同步剪贴板服务",
+        "endpoints": {
+            "health": "/health",
+            "register": "/register",
+            "login": "/login",
+            "docs": "/docs"
+        }
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点"""
+    try:
+        # 检查Redis连接
+        redis_status = "connected" if redis_manager.is_connected() else "disconnected"
+        
+        return {
+            "status": "healthy",
+            "service": "BeeSyncClip",
+            "version": "1.0.0",
+            "timestamp": datetime.now().isoformat(),
+            "components": {
+                "redis": redis_status,
+                "api": "running"
+            },
+            "server_info": {
+                "host": "47.110.154.99",
+                "port": 8000,
+                "environment": "production"
+            }
+        }
+    except Exception as e:
+        return JSONResponse(
+            content={
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            },
+            status_code=503
+        )
 
 
 @app.post("/login")
@@ -190,6 +241,11 @@ async def register(request: RegisterRequest):
         if len(password) < 6:
             return error_response("密码至少需要6个字符", 400)
         
+        # 先检查用户是否已存在
+        existing_user = redis_manager.get_user_by_username(username)
+        if existing_user:
+            return error_response("用户名已存在", 409)
+        
         # 使用我们的认证系统注册
         user = auth_manager.register_user(username=username, password=password)
         
@@ -204,7 +260,7 @@ async def register(request: RegisterRequest):
                 "username": username
             }, 201)
         else:
-            return error_response("用户名已存在", 409)
+            return error_response("注册失败，请稍后重试", 500)
             
     except Exception as e:
         logger.error(f"注册错误: {e}")
@@ -289,44 +345,60 @@ async def add_clipboard(request: AddClipboardRequest):
         if not user:
             return error_response("用户未找到", 404)
         
-        # 创建剪贴板项
-        clip_item = ClipboardItem(
-            id=str(uuid.uuid4()),
-            content=content,
-            content_type=content_type,
-            device_id=device_id,
-            user_id=user.id
-        )
+        # 创建剪贴板项数据
+        clip_id = str(uuid.uuid4())
+        item_data = {
+            "id": clip_id,
+            "content": content,
+            "content_type": content_type,
+            "device_id": device_id,
+            "user_id": user['id'],
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
         
-        # 保存到Redis
-        success = redis_manager.save_clipboard_item(clip_item)
+        # 直接存储到Redis
+        if not redis_manager.is_connected():
+            return error_response("Redis连接失败", 500)
         
-        if success:
-            # 获取用户所有剪贴板内容
-            clipboard_history = redis_manager.get_user_clipboard_history(
-                user.id, page=1, per_page=100
-            )
-            
-            # 转换格式
-            clipboards_list = []
-            for item in clipboard_history.items:
+        # 保存剪贴板项
+        item_key = f"item:{clip_id}"
+        user_key = f"clipboard:{user['id']}"
+        
+        # 存储项目数据
+        redis_manager.redis_client.hset(item_key, mapping=item_data)
+        
+        # 添加到用户的有序集合中
+        score = datetime.now().timestamp()
+        redis_manager.redis_client.zadd(user_key, {clip_id: score})
+        
+        # 设置过期时间
+        redis_manager.redis_client.expire(item_key, 86400)
+        redis_manager.redis_client.expire(user_key, 86400)
+        
+        # 获取用户所有剪贴板内容
+        item_ids = redis_manager.redis_client.zrevrange(user_key, 0, 99)
+        
+        clipboards_list = []
+        for item_id in item_ids:
+            item_key = f"item:{item_id}"
+            item_data = redis_manager.redis_client.hgetall(item_key)
+            if item_data:
                 clipboards_list.append({
-                    "clip_id": item.id,
-                    "content": item.content,
-                    "content_type": item.content_type,
-                    "created_at": item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    "last_modified": item.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    "device_id": item.device_id
+                    "clip_id": item_data['id'],
+                    "content": item_data['content'],
+                    "content_type": item_data.get('content_type', 'text/plain'),
+                    "created_at": item_data['created_at'],
+                    "last_modified": item_data['updated_at'],
+                    "device_id": item_data['device_id']
                 })
-            
-            return success_response({
-                "success": True,
-                "message": "剪贴板内容添加成功",
-                "clip_id": clip_item.id,
-                "clipboards": clipboards_list
-            }, 201)
-        else:
-            return error_response("添加剪贴板内容失败", 500)
+        
+        return success_response({
+            "success": True,
+            "message": "剪贴板内容添加成功",
+            "clip_id": clip_id,
+            "clipboards": clipboards_list
+        }, 201)
             
     except Exception as e:
         logger.error(f"添加剪贴板内容错误: {e}")
@@ -346,29 +418,27 @@ async def delete_clipboard(request: DeleteClipboardRequest):
             return error_response("用户未找到", 404)
         
         # 获取剪贴板项信息用于显示
-        clip_item = redis_manager.get_clipboard_item(clip_id)
-        if not clip_item:
+        item_key = f"item:{clip_id}"
+        item_data = redis_manager.redis_client.hgetall(item_key)
+        if not item_data:
             return error_response("剪贴板内容未找到", 404)
         
         # 删除剪贴板项
-        success = redis_manager.delete_clipboard_item(clip_id)
+        user_key = f"clipboard:{user['id']}"
+        redis_manager.redis_client.zrem(user_key, clip_id)
+        redis_manager.redis_client.delete(item_key)
         
-        if success:
-            # 获取剩余的剪贴板数量
-            clipboard_history = redis_manager.get_user_clipboard_history(
-                user.id, page=1, per_page=1
-            )
-            
-            deleted_content = clip_item.content[:50] + "..." if len(clip_item.content) > 50 else clip_item.content
-            
-            return success_response({
-                "success": True,
-                "message": f"剪贴板内容删除成功: '{deleted_content}'",
-                "clip_id": clip_id,
-                "remaining_clips": clipboard_history.total
-            })
-        else:
-            return error_response("删除剪贴板内容失败", 500)
+        # 获取剩余的剪贴板数量
+        remaining_count = redis_manager.redis_client.zcard(user_key)
+        
+        deleted_content = item_data['content'][:50] + "..." if len(item_data['content']) > 50 else item_data['content']
+        
+        return success_response({
+            "success": True,
+            "message": f"剪贴板内容删除成功: '{deleted_content}'",
+            "clip_id": clip_id,
+            "remaining_clips": remaining_count
+        })
             
     except Exception as e:
         logger.error(f"删除剪贴板内容错误: {e}")
@@ -388,12 +458,12 @@ async def clear_clipboards(request: ClearClipboardsRequest):
         
         # 获取当前剪贴板数量
         clipboard_history = redis_manager.get_user_clipboard_history(
-            user.id, page=1, per_page=1
+            user['id'], page=1, per_page=1
         )
         deleted_count = clipboard_history.total
         
         # 清空用户所有剪贴板内容
-        success = redis_manager.clear_user_clipboard_history(user.id)
+        success = redis_manager.clear_user_clipboard_history(user['id'])
         
         if success:
             return success_response({
@@ -422,7 +492,7 @@ async def get_devices(username: str):
             return error_response("用户未找到", 404)
         
         # 获取用户设备列表
-        user_devices = redis_manager.get_user_devices(user.id)
+        user_devices = redis_manager.get_user_devices(user['id'])
         
         # 转换格式
         devices_list = []
@@ -460,21 +530,26 @@ async def get_clipboards(username: str):
             return error_response("用户未找到", 404)
         
         # 获取用户剪贴板历史
-        clipboard_history = redis_manager.get_user_clipboard_history(
-            user.id, page=1, per_page=100
-        )
+        if not redis_manager.is_connected():
+            return error_response("Redis连接失败", 500)
+        
+        user_key = f"clipboard:{user['id']}"
+        item_ids = redis_manager.redis_client.zrevrange(user_key, 0, 99)
         
         # 转换格式
         clipboards_list = []
-        for item in clipboard_history.items:
-            clipboards_list.append({
-                "clip_id": item.id,
-                "content": item.content,
-                "content_type": item.content_type,
-                "created_at": item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "last_modified": item.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "device_id": item.device_id
-            })
+        for item_id in item_ids:
+            item_key = f"item:{item_id}"
+            item_data = redis_manager.redis_client.hgetall(item_key)
+            if item_data:
+                clipboards_list.append({
+                    "clip_id": item_data['id'],
+                    "content": item_data['content'],
+                    "content_type": item_data.get('content_type', 'text/plain'),
+                    "created_at": item_data['created_at'],
+                    "last_modified": item_data['updated_at'],
+                    "device_id": item_data['device_id']
+                })
         
         return success_response({
             "success": True,

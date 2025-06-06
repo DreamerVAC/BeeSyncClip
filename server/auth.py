@@ -4,9 +4,9 @@ BeeSyncClip 用户认证模块
 
 import jwt
 import hashlib
+import hmac
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from passlib.context import CryptContext
 from loguru import logger
 
 from shared.models import User, Device, AuthRequest, AuthResponse
@@ -18,18 +18,24 @@ class AuthManager:
     """认证管理器"""
     
     def __init__(self):
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        self.secret_key = config_manager.get('security.secret_key', 'default-secret-key')
+        self.secret_key = config_manager.get('security.secret_key', 'default-secret-key-beesyncclip-2024')
         self.algorithm = "HS256"
         self.access_token_expire = config_manager.get('security.access_token_expire', 3600)
     
     def hash_password(self, password: str) -> str:
-        """生成密码哈希"""
-        return self.pwd_context.hash(password)
+        """生成密码哈希 - 使用PBKDF2"""
+        if not password:
+            return ""
+        # 使用PBKDF2进行密码哈希
+        salt = self.secret_key.encode('utf-8')
+        hashed = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        return hashed.hex()
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """验证密码"""
-        return self.pwd_context.verify(plain_password, hashed_password)
+        if not plain_password or not hashed_password:
+            return False
+        return self.hash_password(plain_password) == hashed_password
     
     def create_access_token(self, data: Dict[str, Any]) -> str:
         """创建访问令牌"""
@@ -63,22 +69,34 @@ class AuthManager:
                 logger.error("Redis未连接")
                 return None
             
+            # 检查输入参数
+            if not username or not password:
+                logger.error("用户名或密码为空")
+                return None
+            
             # 检查用户是否已存在
             user_key = f"user:username:{username}"
             if redis_manager.redis_client.exists(user_key):
                 logger.warning(f"用户已存在: {username}")
-                return None
+                return redis_manager.get_user_by_username(username)  # 返回已存在的用户而不是None
             
             # 创建用户
             user = User(
                 username=username,
-                email=email,
+                email=email or f"{username}@beesyncclip.local",
                 password_hash=self.hash_password(password)
             )
             
             # 保存用户到Redis
             user_data = user.dict()
             user_data['created_at'] = user.created_at.isoformat()
+            
+            # 转换布尔值为字符串，确保Redis兼容性
+            for key, value in user_data.items():
+                if isinstance(value, bool):
+                    user_data[key] = str(value)
+                elif isinstance(value, list):
+                    user_data[key] = str(value)  # 将列表转换为字符串
             
             # 保存用户信息
             redis_manager.redis_client.hset(f"user:{user.id}", mapping=user_data)
@@ -126,6 +144,14 @@ class AuthManager:
             # 保存设备信息
             device_data = device.dict()
             device_data['last_seen'] = device.last_seen.isoformat()
+            
+            # 转换布尔值为字符串，确保Redis兼容性
+            for key, value in device_data.items():
+                if isinstance(value, bool):
+                    device_data[key] = str(value)
+                elif isinstance(value, list):
+                    device_data[key] = str(value)
+            
             redis_manager.redis_client.hset(f"device:{device.id}", mapping=device_data)
             
             # 设置设备在线状态

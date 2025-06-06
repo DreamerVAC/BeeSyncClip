@@ -139,9 +139,12 @@ Desktop.ini
 *.ui.h
 *.qm
 
-# Logs
+# Logs and runtime files
 logs/
 *.log
+*.pid
+beesyncclip.log
+beesyncclip.pid
 
 # IDE
 .vscode/settings.json
@@ -151,4 +154,12 @@ logs/
 
 # BeeSyncClip specific
 config/local_settings.yaml
-*.pid 
+debug_auth.py
+test_connection.py
+network_check.sh
+upload_to_server.sh
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp 

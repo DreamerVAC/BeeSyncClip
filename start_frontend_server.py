@@ -55,12 +55,6 @@ def main():
         import uvicorn
         from server.frontend_compatible_server import app
         
-        logger.info("🌐 服务器信息:")
-        logger.info("   地址: http://47.110.154.99:8000")
-        logger.info("   测试账号: testuser")
-        logger.info("   测试密码: test123")
-        logger.info("📱 现在可以使用前端界面连接到真实后端服务器！")
-        
         # 启动uvicorn服务器
         uvicorn.run(
             app,
@@ -69,6 +63,12 @@ def main():
             log_level="info",
             reload=False
         )
+        
+        logger.info("🌐 服务器信息:")
+        logger.info("   地址: http://47.110.154.99:8000")
+        logger.info("   测试账号: testuser")
+        logger.info("   测试密码: test123")
+        logger.info("📱 现在可以使用前端界面连接到真实后端服务器！")
         
     except KeyboardInterrupt:
         logger.info("👋 服务器已停止")

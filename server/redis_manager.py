@@ -241,16 +241,26 @@ class RedisManager:
             if not self.is_connected():
                 return None
             
-            user_key = f"user:{username}"
-            user_data = self.redis_client.hgetall(user_key)
+            # 首先通过用户名索引获取用户ID
+            user_key = f"user:username:{username}"
+            user_id = self.redis_client.get(user_key)
+            
+            if not user_id:
+                return None
+            
+            # 然后获取用户详细信息
+            user_data_key = f"user:{user_id}"
+            user_data = self.redis_client.hgetall(user_data_key)
             
             if not user_data:
                 return None
             
             return {
                 'id': user_data.get('id'),
-                'username': username,
-                'created_at': user_data.get('created_at')
+                'username': user_data.get('username'),
+                'email': user_data.get('email'),
+                'created_at': user_data.get('created_at'),
+                'is_active': user_data.get('is_active', 'True') == 'True'
             }
             
         except Exception as e:

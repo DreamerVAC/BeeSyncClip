@@ -1,0 +1,15 @@
+[Unit]
+Description=BeeSyncClip Server
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/work/software
+Environment=PATH=/home/work/miniconda3/envs/software/bin
+ExecStart=/home/work/miniconda3/envs/software/bin/python start_frontend_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 
