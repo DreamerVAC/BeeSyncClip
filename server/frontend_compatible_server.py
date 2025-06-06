@@ -665,7 +665,7 @@ async def get_clipboards(username: str):
         
         # 获取用户设备列表，并创建一个 device_id 到 device_label 的映射
         user_devices = redis_manager.get_user_devices(user['id'])
-        device_map = {d['id']: d['name'] for d in user_devices}
+        device_map = {d['device_id']: d['name'] for d in user_devices}
         
         # 获取用户剪贴板历史
         if not redis_manager.is_connected():

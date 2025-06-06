@@ -205,6 +205,7 @@ class Ui_DeviceDialog(object):
         DeviceDialog.setWindowTitle(_translate("DeviceDialog", "设备管理"))
         self.label.setText(_translate("DeviceDialog", "已登录的设备"))
         self.syncButton.setText(_translate("DeviceDialog", "刷新列表"))
+        self.statusLabel.setText(_translate("DeviceDialog", "点击刷新按钮加载设备"))
 
 
 class DeviceDialog(QtWidgets.QDialog):
@@ -218,6 +219,7 @@ class DeviceDialog(QtWidgets.QDialog):
         self.device_id = ""
         self.token = ""
         self.ui.syncButton.clicked.connect(self.load_devices)
+        self.ui.retranslateUi(self) # Ensure translations are applied
 
     def set_user_info(self, api_url, username, device_id, token):
         self.api_url = api_url
@@ -299,10 +301,3 @@ class DeviceDialog(QtWidgets.QDialog):
 
     def show_message(self, message):
         self.ui.statusLabel.setText(message)
-
-    def retranslateUi(self, DeviceDialog):
-        _translate = QtCore.QCoreApplication.translate
-        DeviceDialog.setWindowTitle(_translate("DeviceDialog", "设备管理"))
-        self.label.setText(_translate("DeviceDialog", "设备管理"))
-        self.statusLabel.setText(_translate("DeviceDialog", "点击同步按钮加载设备列表"))
-        self.syncButton.setText(_translate("DeviceDialog", "同步"))
