@@ -6,6 +6,9 @@ import requests
 import json
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QThread, pyqtSignal
+import platform
+import uuid
+import os
 
 
 class RegisterThread(QThread):
@@ -114,16 +117,14 @@ class LoginDialog(QtWidgets.QDialog):
         self.ui = Ui_LoginDialog()
         self.ui.setupUi(self)
 
-        # API配置
         self.api_url = "http://47.110.154.99:8000"
-        self.current_username = ""  # 存储当前登录的用户名
-        self.devices = []  # 存储当前用户的设备列表
         self.username = None
         self.device_info = None
-        self.token = None  # 添加token属性
+        self.token = None
+        self.device_id = self.get_persistent_device_id()
 
         # 连接按钮信号
-        self.ui.pushButton_login.clicked.connect(self.handle_login)
+        self.ui.pushButton_login.clicked.connect(self.on_login_clicked)
         self.ui.pushButton_register.clicked.connect(self.show_register_dialog)
 
     def show_register_dialog(self):
@@ -164,26 +165,32 @@ class LoginDialog(QtWidgets.QDialog):
             "label": f"{hostname} ({os_info})"  # 确保包含label字段
         }
 
-    def handle_login(self):
-        """处理登录逻辑"""
+    def on_login_clicked(self):
+        """处理登录按钮点击事件"""
         username = self.ui.lineEdit_username.text().strip()
         password = self.ui.lineEdit_password.text().strip()
 
+        device_info = {
+            "device_id": self.device_id,
+            "device_name": platform.node(),
+            "platform": platform.system(),
+            "version": platform.release()
+        }
+
         if not username or not password:
-            QMessageBox.warning(self, "警告", "账号和密码不能为空!")
+            self.ui.login_feedback_label.setText("请输入用户名和密码")
             return
 
         try:
             # 构造请求数据，包含设备信息
-            device_info = self.get_device_info()
-            data = {
+            login_data = {
                 "username": username,
                 "password": password,
                 "device_info": device_info
             }
 
             # 发送登录请求
-            response = requests.post(f"{self.api_url}/login", json=data, timeout=5)
+            response = requests.post(f"{self.api_url}/login", json=login_data, timeout=5)
             result = response.json()
 
             if response.status_code == 200 and result.get("success"):
@@ -202,18 +209,42 @@ class LoginDialog(QtWidgets.QDialog):
             QMessageBox.critical(self, "错误", f"网络错误: {str(e)}")
         except json.JSONDecodeError:
             QMessageBox.critical(self, "错误", "服务器响应格式错误")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"登录时发生未知错误: {str(e)}")
 
     def get_current_user_devices(self):
         """获取当前用户的设备列表"""
         return self.devices
 
     def get_current_username(self):
-        """获取当前登录的用户名"""
-        return self.current_username
+        """返回当前登录的用户名"""
+        return self.username
 
     def get_token(self):
         """返回登录成功后获取的token"""
         return self.token
+
+    def get_persistent_device_id(self):
+        """获取持久化的设备ID，如果不存在则创建"""
+        config_file = "device_id.conf"
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, "r") as f:
+                    device_id = f.read().strip()
+                    if device_id:
+                        return device_id
+        except Exception as e:
+            print(f"读取device_id失败: {e}")
+
+        # 如果文件不存在或为空，则创建新的ID
+        new_device_id = str(uuid.uuid4())
+        try:
+            with open(config_file, "w") as f:
+                f.write(new_device_id)
+        except Exception as e:
+            print(f"保存device_id失败: {e}")
+        
+        return new_device_id
 
 
 class RegisterDialog(QtWidgets.QDialog):

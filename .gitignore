@@ -162,4 +162,12 @@ upload_to_server.sh
 # Temporary files
 /tmp/
 *.tmp
-*.temp 
+*.temp
+
+# Mac
+.DS_Store
+
+# BeeSyncClip specific
+/client/ui/device_id.conf
+/logs/*
+!/logs/.gitkeep 

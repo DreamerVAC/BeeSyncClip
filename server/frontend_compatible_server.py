@@ -632,12 +632,12 @@ async def get_devices(username: str):
         devices_list = []
         for device in user_devices:
             devices_list.append({
-                "device_id": device['device_id'],
-                "label": device['name'],
-                "os": device['os_info'],
-                "ip_address": device['ip_address'],
-                "first_login": device['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
-                "last_login": device['last_seen'].strftime("%Y-%m-%d %H:%M:%S")
+                "device_id": device.get("device_id"),
+                "label": device.get("name"),
+                "os": device.get("os_info"),
+                "ip_address": device.get("ip_address"),
+                "first_login": device.get("created_at"),
+                "last_login": device.get("last_seen")
             })
         
         return success_response({
@@ -665,7 +665,7 @@ async def get_clipboards(username: str):
         
         # 获取用户设备列表，并创建一个 device_id 到 device_label 的映射
         user_devices = redis_manager.get_user_devices(user['id'])
-        device_map = {d['device_id']: d['name'] for d in user_devices}
+        device_map = {d['id']: d['name'] for d in user_devices}
         
         # 获取用户剪贴板历史
         if not redis_manager.is_connected():
