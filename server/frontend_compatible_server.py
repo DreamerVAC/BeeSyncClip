@@ -524,10 +524,6 @@ async def add_clipboard(request: AddClipboardRequest):
             source_device=device_id
         )
         
-        # 增加用户剪贴板总数
-        user_info.total_clips += 1
-        auth_manager.update_user(user_info)
-        
         logger.info(f"剪贴板添加成功: user={user_id}, device={device_id}, redis_sync=enabled")
         
         return success_response({
