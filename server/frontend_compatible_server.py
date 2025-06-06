@@ -524,15 +524,20 @@ async def add_clipboard(request: AddClipboardRequest):
             source_device=device_id
         )
         
+        # 增加用户剪贴板总数
+        user = redis_manager.get_user_by_username(username)
+        if user:
+            user.total_clips += 1
+            auth_manager.update_user(user)
+        
         logger.info(f"剪贴板添加成功: user={user_id}, device={device_id}, redis_sync=enabled")
         
         return success_response({
             "success": True,
-            "message": "剪贴板内容添加成功",
+            "message": "剪贴板记录已添加",
             "clip_id": clip_id,
-            "sync_method": "redis_pubsub",
-            "websocket_connections": len(websocket_manager.connections.get(user_id, set()))
-        })
+            "item": item_data
+        }, status_code=201)
         
     except Exception as e:
         logger.error(f"添加剪贴板内容失败: {e}")

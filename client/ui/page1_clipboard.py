@@ -126,27 +126,42 @@ class Ui_Dialog(object):
         self.retranslateUi(ClipboardDialog)
         QtCore.QMetaObject.connectSlotsByName(ClipboardDialog)
 
-    def update_status(self, message):
-        """更新状态标签文本"""
-        self.statusLabel.setText(message)
+    def retranslateUi(self, ClipboardDialog):
+        _translate = QtCore.QCoreApplication.translate
+        ClipboardDialog.setWindowTitle(_translate("ClipboardDialog", "BeeSyncClip - 剪贴板"))
+        self.label.setText(_translate("ClipboardDialog", "云端剪贴板记录"))
+        self.statusLabel.setText(_translate("ClipboardDialog", "正在加载..."))
+        self.syncButton.setText(_translate("ClipboardDialog", "手动同步"))
 
-    def set_user_info(self, api_url, username, device_id, device_label):
-        """设置用户信息和设备信息"""
+
+class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setupUi(self)
+
+        self.api_url = None
+        self.username = None
+        self.device_id = None
+        self.device_label = None
+        self.token = None
+
+        self.clipboard = QtWidgets.QApplication.clipboard()
+        self.last_clipboard_text = self.clipboard.text()
+        self.init_clipboard_monitor()
+
+    def set_user_info(self, api_url, username, device_id, device_label, token):
         self.api_url = api_url
         self.username = username
         self.device_id = device_id
         self.device_label = device_label
-        self.load_clipboard_records()  # 自动加载数据
-
-        # 更新状态标签
-        self.update_status("就绪 | 设备: " + device_label)
+        self.token = token
+        self.load_clipboard_records()
+        self.update_status(f"就绪 | 设备: {device_label}")
 
     def add_clipboard_item(self, record):
-        """添加剪贴板记录项（带滚动条和操作按钮）"""
         item = QtWidgets.QListWidgetItem()
-        # 增加高度以容纳设备信息
         item.setSizeHint(QtCore.QSize(600, 120))
-        item.setData(QtCore.Qt.UserRole, record)  # 设置记录数据
+        item.setData(QtCore.Qt.UserRole, record)
 
         widget = QtWidgets.QWidget()
         widget.setStyleSheet("background-color: transparent;")
@@ -154,363 +169,161 @@ class Ui_Dialog(object):
         layout.setContentsMargins(10, 5, 10, 5)
         layout.setSpacing(5)
 
-        # --- 设备信息行 ---
         device_info_layout = QtWidgets.QHBoxLayout()
-
-        # 设备图标
         icon_label = QtWidgets.QLabel()
-        icon = QtGui.QIcon(":/icons/device_icon.png")  # 如果有资源文件
-        pixmap = icon.pixmap(24, 24) if not icon.isNull() else QtGui.QPixmap(24, 24)
+        pixmap = QtGui.QPixmap(24, 24)
         pixmap.fill(QtGui.QColor("#2196F3"))
         icon_label.setPixmap(pixmap)
-        icon_label.setStyleSheet("border-radius: 12px;")
         device_info_layout.addWidget(icon_label)
 
-        # 设备标签
         device_label = QtWidgets.QLabel(f"来自: {record.get('device_label', '未知设备')}")
-        device_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #666;
-                font-weight: bold;
-            }
-        """)
+        device_label.setStyleSheet("font-size: 12px; color: #666; font-weight: bold;")
         device_info_layout.addWidget(device_label)
 
-        # 时间标签
         timestamp = record.get('timestamp', '')
         if timestamp:
             time_label = QtWidgets.QLabel(f"时间: {timestamp}")
-            time_label.setStyleSheet("""
-                QLabel {
-                    font-size: 12px;
-                    color: #888;
-                }
-            """)
+            time_label.setStyleSheet("font-size: 12px; color: #888;")
             device_info_layout.addWidget(time_label)
 
-        device_info_layout.addStretch(1)  # 添加伸缩因子使设备信息靠左
+        device_info_layout.addStretch(1)
         layout.addLayout(device_info_layout)
 
-        # --- 内容区域 ---
         content_layout = QtWidgets.QHBoxLayout()
-
-        # 可滚动的内容区域
         scroll_area = QtWidgets.QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("border: none;")
 
         content_widget = QtWidgets.QWidget()
-        content_widget.setStyleSheet("background-color: transparent;")
         content_widget_layout = QtWidgets.QVBoxLayout(content_widget)
-
         content_label = QtWidgets.QLabel(record.get('content', '无内容'))
         content_label.setWordWrap(True)
-        content_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #333;
-                padding: 5px;
-            }
-        """)
         content_widget_layout.addWidget(content_label)
         scroll_area.setWidget(content_widget)
         content_layout.addWidget(scroll_area, 1)
 
-        # --- 右侧：操作按钮 ---
         btn_layout = QtWidgets.QVBoxLayout()
-        btn_layout.setSpacing(5)
-
-        # 复制按钮
         copy_btn = QtWidgets.QPushButton("复制")
-        copy_btn.setObjectName("copy_btn")
         copy_btn.setFixedSize(80, 30)
-        copy_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-        """)
         copy_btn.clicked.connect(lambda: self.copy_content(record.get('content', '')))
         btn_layout.addWidget(copy_btn)
 
-        # 删除按钮
         delete_btn = QtWidgets.QPushButton("删除")
-        delete_btn.setObjectName("delete_btn")
         delete_btn.setFixedSize(80, 30)
-        delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #d32f2f;
-            }
-        """)
+        delete_btn.setStyleSheet("background-color: #f44336; color: white;")
         delete_btn.clicked.connect(lambda: self.confirm_remove_record(item))
         btn_layout.addWidget(delete_btn)
 
         content_layout.addLayout(btn_layout)
         layout.addLayout(content_layout)
-
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
 
     def copy_content(self, content):
-        """复制纯文本内容到剪贴板"""
-        clipboard = QtWidgets.QApplication.clipboard()
-        clipboard.setText(content)
-
-        # 显示复制成功提示
-        QtWidgets.QToolTip.showText(
-            QtGui.QCursor.pos(),
-            "已复制到剪贴板",
-            self.listWidget,
-            QtCore.QRect(),
-            2000
-        )
+        self.clipboard.setText(content)
+        self.update_status(f"已复制: {content[:20]}...")
 
     def confirm_remove_record(self, item):
-        """确认删除记录"""
         record = item.data(QtCore.Qt.UserRole)
-        if not record:
-            QtWidgets.QMessageBox.warning(None, "错误", "无法获取记录数据")
-            return
-
-        content_preview = record.get('content', '无内容')[:30] + "..." if len(
-            record.get('content', '')) > 30 else record.get('content', '无内容')
-
-        reply = QtWidgets.QMessageBox.question(
-            None,
-            "确认删除",
-            f"确定要删除记录 '{content_preview}' 吗？",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-            QtWidgets.QMessageBox.No
-        )
-
+        reply = QtWidgets.QMessageBox.question(self, '确认删除', '确定要删除这条剪贴板记录吗？',
+                                           QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                                           QtWidgets.QMessageBox.No)
         if reply == QtWidgets.QMessageBox.Yes:
             self.remove_record_item(item)
 
     def remove_record_item(self, item):
-        """删除记录项"""
         record = item.data(QtCore.Qt.UserRole)
-        if not record:
-            QtWidgets.QMessageBox.warning(None, "错误", "无法获取记录数据")
+        record_id = record.get("id")
+
+        if not self.api_url or not record_id or not self.token:
+            self.update_status("错误：无法删除记录，API信息不完整")
             return
 
         try:
-            response = requests.post(f"{self.api_url}/delete_clipboard", json={
-                "username": self.username,
-                "clip_id": record.get("clip_id")
-            })
+            url = f"{self.api_url.rstrip('/')}/clipboard/{record_id}"
+            headers = {'Authorization': f'Bearer {self.token}'}
+            response = requests.delete(url, headers=headers)
 
             if response.status_code == 200:
-                result = response.json()
-                if result.get("success"):
-                    row = self.listWidget.row(item)
-                    self.listWidget.takeItem(row)
-                    QtWidgets.QMessageBox.information(None, "成功", "记录删除成功")
-                else:
-                    QtWidgets.QMessageBox.warning(None, "错误", result.get("message", "删除记录失败"))
+                self.listWidget.takeItem(self.listWidget.row(item))
+                self.update_status("记录已删除")
             else:
-                QtWidgets.QMessageBox.warning(None, "错误", f"删除记录失败，状态码: {response.status_code}")
+                self.update_status(f"删除失败: {response.json().get('detail', '未知错误')}")
         except Exception as e:
-            QtWidgets.QMessageBox.critical(None, "错误", f"删除记录时出错: {str(e)}")
+            self.update_status(f"删除时出错: {e}")
 
-    def retranslateUi(self, ClipboardDialog):
-        _translate = QtCore.QCoreApplication.translate
-        ClipboardDialog.setWindowTitle(_translate("ClipboardDialog", "剪贴板历史"))
-        self.label.setText(_translate("ClipboardDialog", "剪贴板历史记录"))
-        self.syncButton.setText(_translate("ClipboardDialog", "同步剪贴板"))
+    def load_clipboard_records(self):
+        if not self.api_url or not self.token:
+            self.update_status("错误：用户信息未设置，无法加载记录")
+            return
+
+        try:
+            self.update_status("正在从云端加载...")
+            url = f"{self.api_url.rstrip('/')}/clipboard/"
+            headers = {'Authorization': f'Bearer {self.token}'}
+            response = requests.get(url, headers=headers, params={'device_id': self.device_id})
+
+            if response.status_code == 200:
+                records = response.json().get("clipboards", [])
+                self.listWidget.clear()
+                if records:
+                    for record in sorted(records, key=lambda x: x.get('timestamp'), reverse=True):
+                        self.add_clipboard_item(record)
+                    self.update_status(f"加载了 {len(records)} 条记录")
+                else:
+                    self.show_no_records_message()
+            else:
+                self.update_status(f"加载失败: {response.status_code}")
+        except Exception as e:
+            self.update_status(f"加载错误: {e}")
 
     def show_no_records_message(self):
-        """显示无记录的提示"""
-        item = QtWidgets.QListWidgetItem()
-        item.setSizeHint(QtCore.QSize(200, 60))
-
-        widget = QtWidgets.QWidget()
-        widget.setStyleSheet("background-color: transparent;")
-        layout = QtWidgets.QHBoxLayout(widget)
-
-        label = QtWidgets.QLabel("暂无剪贴板记录")
-        label.setAlignment(QtCore.Qt.AlignCenter)
-        label.setStyleSheet("color: #999; font-size: 14px;")
-        layout.addWidget(label)
-
+        self.listWidget.clear()
+        item = QtWidgets.QListWidgetItem("没有可用的剪贴板记录。")
         self.listWidget.addItem(item)
-        self.listWidget.setItemWidget(item, widget)
-
-
-class ClipboardDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):  # 移除必需的参数
-        super().__init__(parent)
-        self.ui = Ui_Dialog()
-        self.ui.setupUi(self)
-
-        # 初始化空属性
-        self.api_url = None
-        self.username = None
-        self.device_id = None
-        self.device_label = None
-
-        # 绑定同步按钮事件
-        self.ui.syncButton.clicked.connect(self.load_clipboard_records)
-
-        # 初始时不加载数据
-        # 更新状态
-        self.ui.update_status("请先登录")
-
-        # 初始化剪贴板监听
-        self.init_clipboard_monitor()
-
-        # 设置定时器
-        self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.check_clipboard)
-        self.timer.start(30000)
-
-        # 记录上次剪贴板内容
-        self.last_clipboard_content = ""
 
     def init_clipboard_monitor(self):
-        """初始化剪贴板监听器"""
-        self.clipboard = QtWidgets.QApplication.clipboard()
         self.clipboard.dataChanged.connect(self.on_clipboard_changed)
 
     def on_clipboard_changed(self):
-        """剪贴板内容变化时的处理"""
-        # 获取剪贴板内容
-        clipboard_text = self.clipboard.text().strip()
-
-        # 忽略空内容或与上次相同的内容
-        if not clipboard_text or clipboard_text == self.last_clipboard_content:
-            return
-
-        # 更新上次内容
-        self.last_clipboard_content = clipboard_text
-
-        # 添加到本地剪贴板历史
-        self.add_local_clipboard_item(clipboard_text)
-
-        # 发送到服务器
-        self.send_to_server(clipboard_text)
-
-        # 更新状态
-        self.ui.update_status(f"已添加新内容 | 设备: {self.device_label} | 长度: {len(clipboard_text)}字符")
-
-        # 显示提示
-        QtWidgets.QToolTip.showText(
-            QtGui.QCursor.pos(),
-            "已添加到剪贴板历史",
-            self,
-            QtCore.QRect(),
-            2000
-        )
-
-    def check_clipboard(self):
-        """定时检查剪贴板内容（备用方法）"""
-        current_text = self.clipboard.text().strip()
-        if current_text and current_text != self.last_clipboard_content:
-            self.on_clipboard_changed()
+        if self.clipboard.mimeData().hasText():
+            current_text = self.clipboard.text()
+            if current_text != self.last_clipboard_text:
+                self.last_clipboard_text = current_text
+                self.add_local_clipboard_item(current_text)
 
     def add_local_clipboard_item(self, content):
-        """在本地添加剪贴板记录项"""
-        # 创建记录对象
-        record = {
-            "clip_id": str(int(time.time())),  # 使用时间戳作为临时ID
-            "content": content,
-            "content_type": "text/plain",
-            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "last_modified": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "device_id": self.device_id,
-            "device_label": self.device_label
-        }
-
-        # 添加到列表顶部
-        self.ui.add_clipboard_item(record)
+        if not self.username:
+            return
+        self.send_to_server(content)
 
     def send_to_server(self, content):
-        """将剪贴板内容发送到服务器"""
+        if not self.api_url or not self.token:
+            return
+
         try:
-            response = requests.post(f"{self.api_url}/add_clipboard", json={
+            url = f"{self.api_url.rstrip('/')}/add_clipboard"
+            headers = {"Authorization": f"Bearer {self.token}"}
+            data = {
                 "username": self.username,
                 "content": content,
                 "device_id": self.device_id,
                 "content_type": "text/plain"
-            })
+            }
+            response = requests.post(url, json=data, headers=headers, timeout=5)
 
             if response.status_code == 201:
                 result = response.json()
                 if result.get("success"):
-                    # 更新状态
-                    self.ui.update_status(f"已同步到服务器 | 设备: {self.device_label}")
+                    self.update_status("新内容已同步到云端")
+                    # 重新加载以显示新项目，包括来自服务器的ID
+                    self.load_clipboard_records()
                 else:
-                    self.ui.update_status(f"同步失败: {result.get('message', '未知错误')}")
+                    self.update_status(f"同步失败: {result.get('message')}")
             else:
-                self.ui.update_status(f"服务器错误: {response.status_code}")
+                self.update_status(f"同步失败: 服务器错误 {response.status_code}")
         except Exception as e:
-            self.ui.update_status(f"网络错误: {str(e)}")
+            self.update_status(f"同步错误: {e}")
 
-    def set_user_info(self, api_url, username, device_id, device_label):
-        """设置用户信息（登录后调用）"""
-        self.api_url = api_url
-        self.username = username
-        self.device_id = device_id
-        self.device_label = device_label
-
-        # 设置后加载数据
-        self.load_clipboard_records()
-
-        # 更新状态
-        self.ui.update_status(f"就绪 | 设备: {device_label} | 正在监听剪贴板...")
-
-    def load_clipboard_records(self):
-        """从服务器加载剪贴板记录（点击同步按钮时触发）"""
-        self.ui.update_status("正在同步剪贴板记录...")
-        try:
-            # 获取设备信息
-            devices_response = requests.get(f"{self.api_url}/get_devices?username={self.username}")
-            devices_result = devices_response.json()
-
-            if devices_response.status_code != 200 or not devices_result.get("success"):
-                QtWidgets.QMessageBox.warning(self, "警告", "获取设备信息失败")
-                self.ui.update_status("同步失败: 无法获取设备信息")
-                return
-
-            device_map = {d['device_id']: d['label'] for d in devices_result.get("devices", [])}
-
-            # 获取剪贴板记录
-            response = requests.get(f"{self.api_url}/get_clipboards?username={self.username}")
-            result = response.json()
-
-            if response.status_code == 200 and result.get("success"):
-                records = result.get("clipboards", [])
-                self.ui.listWidget.clear()
-
-                if not records:
-                    self.ui.show_no_records_message()
-                    self.ui.update_status("同步完成 | 无剪贴板记录")
-                else:
-                    # 按时间倒序排序
-                    sorted_records = sorted(records, key=lambda x: x.get('created_at', ''), reverse=True)
-
-                    for record in sorted_records:
-                        # 添加设备标签信息
-                        record['device_label'] = device_map.get(record.get('device_id'), '未知设备')
-                        self.ui.add_clipboard_item(record)
-
-                    self.ui.update_status(f"同步完成 | 共 {len(records)} 条记录")
-            else:
-                QtWidgets.QMessageBox.warning(self, "错误", result.get("message", "获取剪贴板记录失败"))
-                self.ui.update_status(f"同步失败: {result.get('message', '未知错误')}")
-
-        except requests.exceptions.ConnectionError:
-            QtWidgets.QMessageBox.critical(self, "连接错误", "无法连接到服务器，请检查网络连接")
-            self.ui.update_status("同步失败: 无法连接到服务器")
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "错误", f"加载剪贴板记录失败: {str(e)}")
-            self.ui.update_status(f"同步失败: {str(e)}")
+    def update_status(self, message):
+        self.statusLabel.setText(message)

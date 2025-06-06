@@ -124,6 +124,7 @@ class Ui_DeviceDialog(object):
 
         self.retranslateUi(ClipboardDialog)
         QtCore.QMetaObject.connectSlotsByName(ClipboardDialog)
+
     def add_device_item(self, device_info, is_current_device=False):
         """添加设备项 - 简化版本"""
         item = QtWidgets.QListWidgetItem()
@@ -193,27 +194,25 @@ class Ui_DeviceDialog(object):
             }
         """)
         delete_btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        delete_btn.clicked.connect(lambda: self.confirm_remove_device(item, is_current_device))
+        delete_btn.clicked.connect(lambda: self.confirm_remove_device(item))
         layout.addWidget(delete_btn)
 
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
 
-    def confirm_remove_device(self, item, is_current_device):
+    def confirm_remove_device(self, item):
         """确认删除设备"""
         device_info = item.data(QtCore.Qt.UserRole)
         device_name = device_info.get('label', '未知设备')
 
+        is_current_device = device_info.get('device_id') == self.device_id
         if is_current_device:
-            QtWidgets.QMessageBox.warning(None, "提示", "不能删除当前正在使用的设备！")
+            QtWidgets.QMessageBox.warning(self, "提示", "不能删除当前正在使用的设备！")
             return
 
         reply = QtWidgets.QMessageBox.question(
-            None,
-            "确认删除",
-            f"确定要删除设备 '{device_name}' 吗？",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-            QtWidgets.QMessageBox.No
+            self, "确认删除", f"确定要删除设备 '{device_name}' 吗？",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No
         )
 
         if reply == QtWidgets.QMessageBox.Yes:
@@ -222,40 +221,35 @@ class Ui_DeviceDialog(object):
     def remove_device_item(self, item):
         """删除设备项"""
         device_info = item.data(QtCore.Qt.UserRole)
+        device_id = device_info.get("device_id")
+
+        if not all([self.api_url, self.username, device_id, self.token]):
+            self.show_message("无法删除设备：信息不完整")
+            return
 
         try:
-            response = requests.post(f"{self.api_url}/remove_device", json={
-                "username": self.username,
-                "device_id": device_info.get("device_id")
-            })
+            url = f"{self.api_url}/remove_device"
+            headers = {"Authorization": f"Bearer {self.token}"}
+            data = {"username": self.username, "device_id": device_id}
+            response = requests.post(url, json=data, headers=headers, timeout=5)
 
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
-                    row = self.listWidget.row(item)
-                    self.listWidget.takeItem(row)
-
-                    # 显示删除的剪贴板记录数量
-                    removed_count = result.get("removed_clip_count", 0)
-                    if removed_count > 0:
-                        QtWidgets.QMessageBox.information(
-                            None,
-                            "删除成功",
-                            f"设备删除成功，同时删除了{removed_count}条相关剪贴板记录"
-                        )
-                    else:
-                        QtWidgets.QMessageBox.information(None, "成功", "设备删除成功")
+                    self.listWidget.takeItem(self.listWidget.row(item))
+                    self.show_message(f"设备 '{device_info.get('label')}' 已删除")
                 else:
-                    QtWidgets.QMessageBox.warning(None, "错误", result.get("message", "删除设备失败"))
+                    self.show_message(f"删除失败: {result.get('message')}")
             else:
-                QtWidgets.QMessageBox.warning(None, "错误", "删除设备失败")
+                self.show_message(f"删除失败: 服务器错误 {response.status_code}")
         except Exception as e:
-            QtWidgets.QMessageBox.critical(None, "错误", f"删除设备时出错: {str(e)}")
+            self.show_message(f"删除时出错: {e}")
 
     def retranslateUi(self, DeviceDialog):
         _translate = QtCore.QCoreApplication.translate
         DeviceDialog.setWindowTitle(_translate("DeviceDialog", "设备管理"))
-        self.label.setText(_translate("DeviceDialog", "我的设备"))
+        self.label.setText(_translate("DeviceDialog", "已登录的设备"))
+        self.syncButton.setText(_translate("DeviceDialog", "刷新列表"))
 
 
 class DeviceDialog(QtWidgets.QDialog):
@@ -265,40 +259,51 @@ class DeviceDialog(QtWidgets.QDialog):
         self.ui.setupUi(self)
 
         # 设置UI对象的api_url属性
-        self.ui.api_url = ""
-        self.ui.username = ""
-        self.ui.current_device_id = ""
+        self.api_url = None
+        self.username = None
+        self.device_id = None
+        self.token = None  # 添加token属性
 
-    def set_user_info(self, api_url, username, current_device_id):
-        """设置用户信息后加载设备"""
-        self.ui.api_url = api_url
-        self.ui.username = username
-        self.ui.current_device_id = current_device_id
+    def set_user_info(self, api_url, username, device_id, token):
+        """设置用户信息"""
+        self.api_url = api_url
+        self.username = username
+        self.device_id = device_id
+        self.token = token  # 保存token
         self.load_devices()
 
     def load_devices(self):
-        """从服务器加载设备列表"""
-        if not self.ui.username or not self.ui.api_url:
-            QtWidgets.QMessageBox.warning(self, "警告", "请先登录后再查看设备列表")
+        """加载设备列表"""
+        if not self.api_url or not self.username or not self.token:
+            self.show_message("用户信息不完整，无法加载设备")
             return
 
+        self.ui.listWidget.clear()
+        self.show_message("正在加载设备列表...")
+
         try:
-            response = requests.get(f"{self.ui.api_url}/get_devices?username={self.ui.username}")
-            result = response.json()
+            url = f"{self.api_url}/get_devices"
+            headers = {"Authorization": f"Bearer {self.token}"}
+            params = {"username": self.username}
+            response = requests.get(url, headers=headers, params=params, timeout=5)
 
-            if response.status_code == 200 and result.get("success"):
-                devices = result.get("devices", [])
-
-                # 清空现有列表
-                self.ui.listWidget.clear()
-
-                for device in devices:
-                    is_current = device.get('device_id') == self.ui.current_device_id
-                    self.ui.add_device_item(device, is_current)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    devices = result.get("devices", [])
+                    if not devices:
+                        self.show_message("没有找到已登录的设备")
+                    else:
+                        self.ui.listWidget.clear()
+                        for device in devices:
+                            self.ui.add_device_item(device)
+                else:
+                    self.show_message(f"加载失败: {result.get('message')}")
             else:
-                QtWidgets.QMessageBox.warning(self, "错误", result.get("message", "获取设备列表失败"))
-
-        except requests.exceptions.ConnectionError:
-            QtWidgets.QMessageBox.critical(self, "连接错误", "无法连接到服务器，请检查网络连接")
+                self.show_message(f"服务器错误: {response.status_code}")
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "错误", f"加载设备列表失败: {str(e)}")
+            self.show_message(f"网络错误: {e}")
+
+    def show_message(self, message):
+        """在状态标签中显示消息"""
+        self.ui.statusLabel.setText(message)

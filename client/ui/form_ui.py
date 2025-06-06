@@ -191,20 +191,22 @@ class MainWindow(QtWidgets.QWidget):
         login_dialog = self.ui.login_dialog
         api_url = login_dialog.api_url
         username = login_dialog.get_current_username()
-        device_info = login_dialog.get_device_info()  # 获取设备信息
+        device_info = login_dialog.get_device_info()
+        token = login_dialog.get_token()
 
         # 打印调试信息
-        print(f"[DEBUG] Login success! api_url={api_url}, username={username}")
+        print(f"[DEBUG] Login success! api_url={api_url}, username={username}, token_len={len(token) if token else 0}")
 
         # 设置设备对话框的用户信息
-        self.ui.device_dialog.set_user_info(api_url, username, device_info.get('device_id'))
+        self.ui.device_dialog.set_user_info(api_url, username, device_info.get('device_id'), token)
 
         # 设置剪贴板对话框的用户信息
         self.ui.clipboard_dialog.set_user_info(
             api_url,
             username,
             device_info.get('device_id'),
-            device_info.get('label', '当前设备')  # 添加设备标签
+            device_info.get('label', '当前设备'),
+            token
         )
 
 

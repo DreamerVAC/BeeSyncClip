@@ -83,6 +83,12 @@ class Ui_LoginDialog(object):
         self.pushButton_register.setObjectName("pushButton_register")
         self.verticalLayout.addWidget(self.pushButton_register)
 
+        # 登录反馈标签
+        self.login_feedback_label = QtWidgets.QLabel(LoginDialog)
+        self.login_feedback_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.login_feedback_label.setObjectName("login_feedback_label")
+        self.verticalLayout.addWidget(self.login_feedback_label)
+
         # 底部弹簧
         spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout.addItem(spacerItem)
@@ -99,6 +105,7 @@ class Ui_LoginDialog(object):
         self.label_password.setText(_translate("LoginDialog", "密码:"))
         self.pushButton_login.setText(_translate("LoginDialog", "登录"))
         self.pushButton_register.setText(_translate("LoginDialog", "注册"))
+        self.login_feedback_label.setText("")
 
 
 class LoginDialog(QtWidgets.QDialog):
@@ -111,6 +118,9 @@ class LoginDialog(QtWidgets.QDialog):
         self.api_url = "http://47.110.154.99:8000"
         self.current_username = ""  # 存储当前登录的用户名
         self.devices = []  # 存储当前用户的设备列表
+        self.username = None
+        self.device_info = None
+        self.token = None  # 添加token属性
 
         # 连接按钮信号
         self.ui.pushButton_login.clicked.connect(self.handle_login)
@@ -173,10 +183,13 @@ class LoginDialog(QtWidgets.QDialog):
             }
 
             # 发送登录请求
-            response = requests.post(f"{self.api_url}/login", json=data)
+            response = requests.post(f"{self.api_url}/login", json=data, timeout=5)
             result = response.json()
 
             if response.status_code == 200 and result.get("success"):
+                self.username = username
+                self.device_info = result.get("current_device", {})
+                self.token = result.get("token")  # 保存token
                 self.current_username = username
                 self.devices = result.get("devices", [])
                 QMessageBox.information(self, "成功", "登录成功!")
@@ -197,6 +210,10 @@ class LoginDialog(QtWidgets.QDialog):
     def get_current_username(self):
         """获取当前登录的用户名"""
         return self.current_username
+
+    def get_token(self):
+        """返回登录成功后获取的token"""
+        return self.token
 
 
 class RegisterDialog(QtWidgets.QDialog):
