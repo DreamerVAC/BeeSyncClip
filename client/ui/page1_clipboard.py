@@ -180,7 +180,7 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
         device_label.setStyleSheet("font-size: 12px; color: #666; font-weight: bold;")
         device_info_layout.addWidget(device_label)
 
-        timestamp = record.get('timestamp', '')
+        timestamp = record.get('created_at', '')
         if timestamp:
             time_label = QtWidgets.QLabel(f"时间: {timestamp}")
             time_label.setStyleSheet("font-size: 12px; color: #888;")
@@ -233,20 +233,25 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
 
     def remove_record_item(self, item):
         record = item.data(QtCore.Qt.UserRole)
-        record_id = record.get("id")
+        record_id = record.get("clip_id")
 
         if not self.api_url or not record_id or not self.token:
             self.update_status("错误：无法删除记录，API信息不完整")
             return
 
         try:
-            url = f"{self.api_url.rstrip('/')}/clipboard/{record_id}"
+            url = f"{self.api_url.rstrip('/')}/delete_clipboard"
             headers = {'Authorization': f'Bearer {self.token}'}
-            response = requests.delete(url, headers=headers)
+            data = {"username": self.username, "clip_id": record_id}
+            response = requests.post(url, json=data, headers=headers, timeout=5)
 
             if response.status_code == 200:
-                self.listWidget.takeItem(self.listWidget.row(item))
-                self.update_status("记录已删除")
+                result = response.json()
+                if result.get("success"):
+                    self.listWidget.takeItem(self.listWidget.row(item))
+                    self.update_status("记录已删除")
+                else:
+                    self.update_status(f"删除失败: {result.get('message')}")
             else:
                 self.update_status(f"删除失败: {response.json().get('detail', '未知错误')}")
         except Exception as e:
@@ -259,19 +264,23 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
 
         try:
             self.update_status("正在从云端加载...")
-            url = f"{self.api_url.rstrip('/')}/clipboard/"
+            url = f"{self.api_url.rstrip('/')}/get_clipboards"
             headers = {'Authorization': f'Bearer {self.token}'}
-            response = requests.get(url, headers=headers, params={'device_id': self.device_id})
+            response = requests.get(url, headers=headers, params={'username': self.username})
 
             if response.status_code == 200:
-                records = response.json().get("clipboards", [])
-                self.listWidget.clear()
-                if records:
-                    for record in sorted(records, key=lambda x: x.get('timestamp'), reverse=True):
-                        self.add_clipboard_item(record)
-                    self.update_status(f"加载了 {len(records)} 条记录")
+                result = response.json()
+                if result.get("success"):
+                    records = result.get("clipboards", [])
+                    self.listWidget.clear()
+                    if records:
+                        for record in sorted(records, key=lambda x: x.get('created_at'), reverse=True):
+                            self.add_clipboard_item(record)
+                        self.update_status(f"加载了 {len(records)} 条记录")
+                    else:
+                        self.show_no_records_message()
                 else:
-                    self.show_no_records_message()
+                    self.update_status(f"加载失败: {result.get('message')}")
             else:
                 self.update_status(f"加载失败: {response.status_code}")
         except Exception as e:

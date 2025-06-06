@@ -667,6 +667,10 @@ async def get_clipboards(username: str):
         if not user:
             return error_response("用户未找到", 404)
         
+        # 获取用户设备列表，并创建一个 device_id 到 device_label 的映射
+        user_devices = redis_manager.get_user_devices(user['id'])
+        device_map = {d.id: d.name for d in user_devices}
+        
         # 获取用户剪贴板历史
         if not redis_manager.is_connected():
             return error_response("Redis连接失败", 500)
@@ -680,13 +684,15 @@ async def get_clipboards(username: str):
             item_key = f"item:{item_id}"
             item_data = redis_manager.redis_client.hgetall(item_key)
             if item_data:
+                device_id = item_data['device_id']
                 clipboards_list.append({
                     "clip_id": item_data['id'],
                     "content": item_data['content'],
                     "content_type": item_data.get('content_type', 'text/plain'),
                     "created_at": item_data['created_at'],
                     "last_modified": item_data['updated_at'],
-                    "device_id": item_data['device_id']
+                    "device_id": device_id,
+                    "device_label": device_map.get(device_id, "未知设备")  # 添加设备标签
                 })
         
         return success_response({
