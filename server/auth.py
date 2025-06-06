@@ -154,6 +154,9 @@ class AuthManager:
             
             redis_manager.redis_client.hset(f"device:{device.id}", mapping=device_data)
             
+            # 将设备ID添加到用户的设备列表中
+            redis_manager.redis_client.sadd(f"devices:{user_id}", device.id)
+            
             # 设置设备在线状态
             redis_manager.set_device_online(user_id, device.id)
             

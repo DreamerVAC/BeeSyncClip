@@ -516,6 +516,8 @@ class RedisManager:
                 # 从用户设备集合中删除
                 devices_key = f"devices:{user_id}"
                 self.redis_client.srem(devices_key, device_id)
+                # 从在线设备集合中删除
+                self.redis_client.srem(f"online_devices:{user_id}", device_id)
             
             # 删除设备信息
             self.redis_client.delete(device_key)

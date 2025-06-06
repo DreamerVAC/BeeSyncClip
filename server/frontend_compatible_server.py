@@ -302,14 +302,14 @@ async def login(request: LoginRequest):
             # 查找当前设备信息
             current_device = None
             for device in user_devices:
-                if device.device_id == device_info['device_id']:
+                if device['device_id'] == device_info['device_id']:
                     current_device = {
-                        "device_id": device.device_id,
-                        "label": device.name,
-                        "os": device.os_info,
-                        "ip_address": device.ip_address,
-                        "first_login": device.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                        "last_login": device.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+                        "device_id": device['device_id'],
+                        "label": device['name'],
+                        "os": device['os_info'],
+                        "ip_address": device['ip_address'],
+                        "first_login": device['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                        "last_login": device['last_seen'].strftime("%Y-%m-%d %H:%M:%S")
                     }
                     break
             
@@ -317,12 +317,12 @@ async def login(request: LoginRequest):
             devices_list = []
             for device in user_devices:
                 devices_list.append({
-                    "device_id": device.device_id,
-                    "label": device.name,
-                    "os": device.os_info,
-                    "ip_address": device.ip_address,
-                    "first_login": device.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                    "last_login": device.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+                    "device_id": device['device_id'],
+                    "label": device['name'],
+                    "os": device['os_info'],
+                    "ip_address": device['ip_address'],
+                    "first_login": device['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                    "last_login": device['last_seen'].strftime("%Y-%m-%d %H:%M:%S")
                 })
             
             # 转换剪贴板格式
@@ -632,12 +632,12 @@ async def get_devices(username: str):
         devices_list = []
         for device in user_devices:
             devices_list.append({
-                "device_id": device.device_id,
-                "label": device.name,
-                "os": device.os_info,
-                "ip_address": device.ip_address,
-                "first_login": device.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "last_login": device.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+                "device_id": device['device_id'],
+                "label": device['name'],
+                "os": device['os_info'],
+                "ip_address": device['ip_address'],
+                "first_login": device['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                "last_login": device['last_seen'].strftime("%Y-%m-%d %H:%M:%S")
             })
         
         return success_response({
@@ -665,7 +665,7 @@ async def get_clipboards(username: str):
         
         # 获取用户设备列表，并创建一个 device_id 到 device_label 的映射
         user_devices = redis_manager.get_user_devices(user['id'])
-        device_map = {d.id: d.name for d in user_devices}
+        device_map = {d['device_id']: d['name'] for d in user_devices}
         
         # 获取用户剪贴板历史
         if not redis_manager.is_connected():

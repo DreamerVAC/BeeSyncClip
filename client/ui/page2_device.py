@@ -194,11 +194,63 @@ class Ui_DeviceDialog(object):
             }
         """)
         delete_btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        delete_btn.clicked.connect(lambda: self.confirm_remove_device(item))
+        delete_btn.clicked.connect(lambda: self.parent_dialog.confirm_remove_device(item))
         layout.addWidget(delete_btn)
 
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
+
+    def retranslateUi(self, DeviceDialog):
+        _translate = QtCore.QCoreApplication.translate
+        DeviceDialog.setWindowTitle(_translate("DeviceDialog", "设备管理"))
+        self.label.setText(_translate("DeviceDialog", "已登录的设备"))
+        self.syncButton.setText(_translate("DeviceDialog", "刷新列表"))
+
+
+class DeviceDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super(DeviceDialog, self).__init__(parent)
+        self.ui = Ui_DeviceDialog()
+        self.ui.setupUi(self)
+        self.ui.parent_dialog = self  # 让UI可以访问主对话框
+        self.api_url = ""
+        self.username = ""
+        self.device_id = ""
+        self.token = ""
+        self.ui.syncButton.clicked.connect(self.load_devices)
+
+    def set_user_info(self, api_url, username, device_id, token):
+        self.api_url = api_url
+        self.username = username
+        self.device_id = device_id
+        self.token = token
+
+    def load_devices(self):
+        if not all([self.api_url, self.username, self.token]):
+            self.show_message("无法加载设备：信息不完整")
+            return
+
+        try:
+            self.ui.listWidget.clear()
+            self.ui.statusLabel.setText("正在加载设备列表...")
+            url = f"{self.api_url}/get_devices?username={self.username}"
+            headers = {"Authorization": f"Bearer {self.token}"}
+            response = requests.get(url, headers=headers, timeout=5)
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    devices = result.get("devices", [])
+                    self.ui.statusLabel.setText(f"共找到 {len(devices)} 个设备")
+                    for device in devices:
+                        is_current = device.get('device_id') == self.device_id
+                        self.ui.add_device_item(device, is_current_device=is_current)
+                else:
+                    self.show_message(f"加载失败: {result.get('message')}")
+            else:
+                self.show_message(f"加载失败: 服务器错误 {response.status_code}")
+        except Exception as e:
+            self.show_message(f"加载时出错: {e}")
 
     def confirm_remove_device(self, item):
         """确认删除设备"""
@@ -236,7 +288,7 @@ class Ui_DeviceDialog(object):
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
-                    self.listWidget.takeItem(self.listWidget.row(item))
+                    self.ui.listWidget.takeItem(self.ui.listWidget.row(item))
                     self.show_message(f"设备 '{device_info.get('label')}' 已删除")
                 else:
                     self.show_message(f"删除失败: {result.get('message')}")
@@ -245,65 +297,12 @@ class Ui_DeviceDialog(object):
         except Exception as e:
             self.show_message(f"删除时出错: {e}")
 
+    def show_message(self, message):
+        self.ui.statusLabel.setText(message)
+
     def retranslateUi(self, DeviceDialog):
         _translate = QtCore.QCoreApplication.translate
         DeviceDialog.setWindowTitle(_translate("DeviceDialog", "设备管理"))
-        self.label.setText(_translate("DeviceDialog", "已登录的设备"))
-        self.syncButton.setText(_translate("DeviceDialog", "刷新列表"))
-
-
-class DeviceDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.ui = Ui_DeviceDialog()
-        self.ui.setupUi(self)
-
-        # 设置UI对象的api_url属性
-        self.api_url = None
-        self.username = None
-        self.device_id = None
-        self.token = None  # 添加token属性
-
-    def set_user_info(self, api_url, username, device_id, token):
-        """设置用户信息"""
-        self.api_url = api_url
-        self.username = username
-        self.device_id = device_id
-        self.token = token  # 保存token
-        self.load_devices()
-
-    def load_devices(self):
-        """加载设备列表"""
-        if not self.api_url or not self.username or not self.token:
-            self.show_message("用户信息不完整，无法加载设备")
-            return
-
-        self.ui.listWidget.clear()
-        self.show_message("正在加载设备列表...")
-
-        try:
-            url = f"{self.api_url}/get_devices"
-            headers = {"Authorization": f"Bearer {self.token}"}
-            params = {"username": self.username}
-            response = requests.get(url, headers=headers, params=params, timeout=5)
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("success"):
-                    devices = result.get("devices", [])
-                    if not devices:
-                        self.show_message("没有找到已登录的设备")
-                    else:
-                        self.ui.listWidget.clear()
-                        for device in devices:
-                            self.ui.add_device_item(device)
-                else:
-                    self.show_message(f"加载失败: {result.get('message')}")
-            else:
-                self.show_message(f"服务器错误: {response.status_code}")
-        except Exception as e:
-            self.show_message(f"网络错误: {e}")
-
-    def show_message(self, message):
-        """在状态标签中显示消息"""
-        self.ui.statusLabel.setText(message)
+        self.label.setText(_translate("DeviceDialog", "设备管理"))
+        self.statusLabel.setText(_translate("DeviceDialog", "点击同步按钮加载设备列表"))
+        self.syncButton.setText(_translate("DeviceDialog", "同步"))
