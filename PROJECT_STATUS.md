@@ -2,7 +2,7 @@
 
 ## 🎯 项目概述
 
-BeeSyncClip 是一个跨平台剪贴板同步工具，采用 Python + PyQt6 + FastAPI + Redis 架构，支持多设备实时剪贴板同步。
+BeeSyncClip 是一个跨平台剪贴板同步工具，采用 Python + PyQt5 + FastAPI + Redis 架构，支持多设备实时剪贴板同步。
 
 **当前版本**: v1.1 - 生产就绪 (新增WebSocket实时同步)  
 **部署状态**: ✅ 已部署运行 - http://47.110.154.99:8000  
@@ -10,11 +10,30 @@ BeeSyncClip 是一个跨平台剪贴板同步工具，采用 Python + PyQt6 + Fa
 
 ## ✅ 已完成功能
 
-### 🏗️ 核心架构
-- ✅ **项目结构**: 清晰的模块化架构 (client/, desktop/, server/, shared/)
-- ✅ **API设计**: RESTful API，完整的接口文档
-- ✅ **数据存储**: Redis数据库，支持持久化和高性能查询
-- ✅ **认证系统**: 用户注册/登录，设备管理，安全认证
+### 🏗️ 项目架构
+
+```
+BeeSyncClip/
+├── server/                 # 后端服务器
+│   ├── main_server.py     # 主服务器启动
+│   ├── api_server.py      # HTTP API服务
+│   ├── frontend_compatible_server.py  # 前端兼容服务器
+│   ├── websocket_server.py # WebSocket服务
+│   ├── redis_manager.py   # Redis管理器
+│   ├── auth.py            # 认证模块
+│   └── models/            # 数据模型
+├── client/                # PyQt5 GUI客户端
+│   ├── main.py           # 客户端入口
+│   ├── ui/               # GUI界面
+│   │   ├── form_ui.py    # 主界面
+│   │   ├── page1_clipboard.py  # 剪贴板页面
+│   │   ├── page2_device.py     # 设备管理页面
+│   │   └── page3_login.py      # 登录页面
+│   └── api/              # API客户端
+├── shared/                # 共享模块
+├── config/                # 配置文件
+└── requirements.txt       # 项目依赖
+```
 
 ### 🚀 后端服务
 - ✅ **FastAPI服务器**: 高性能Web API服务
@@ -38,7 +57,7 @@ BeeSyncClip 是一个跨平台剪贴板同步工具，采用 Python + PyQt6 + Fa
 - ✅ **错误处理**: 完善的异常处理和恢复机制
 
 ### 🖥️ 客户端应用
-- ✅ **PyQt6 GUI**: 原生桌面应用，美观界面
+- ✅ **PyQt5 GUI**: 原生桌面应用，美观界面
 - ✅ **剪贴板监控**: 实时监控系统剪贴板变化
 - ✅ **历史管理**: 查看、搜索、删除剪贴板历史
 - ✅ **跨设备同步**: 多设备间剪贴板内容同步
@@ -116,7 +135,7 @@ BeeSyncClip 是一个跨平台剪贴板同步工具，采用 Python + PyQt6 + Fa
 
 ### 客户端要求
 - **Python**: 3.8+
-- **必需依赖**: PyQt6, pyperclip, requests, websockets
+- **必需依赖**: PyQt5, pyperclip, requests, websockets
 - **平台支持**: Windows, macOS, Linux
 
 ### 性能指标

@@ -7,10 +7,8 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.3
 starlette==0.46.2
 
-# GUI 框架 (PyQt6)
-PyQt6==6.4.2
-PyQt6-tools==6.4.2.3.3
-PyQt6_sip==13.10.2
+# GUI 框架 (PyQt5)
+PyQt5==5.15.9
 
 # ====== 数据存储和缓存 ======
 # Redis 客户端

@@ -12,6 +12,16 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+# 设置Python环境
+PYTHON_PATH="/home/work/miniconda3/envs/software/bin/python3"
+
+# 检查Python环境
+if [ ! -f "$PYTHON_PATH" ]; then
+    echo "❌ Python环境未找到: $PYTHON_PATH"
+    echo "💡 请检查conda环境是否正确"
+    exit 1
+fi
+
 # 检查Redis连接
 echo "🔍 检查Redis连接..."
 if redis-cli ping > /dev/null 2>&1; then
@@ -85,5 +95,5 @@ echo "🔗 服务器地址: http://47.110.154.99"
 echo "📄 日志将直接输出到终端"
 echo ""
 
-# 启动Python服务器
-python3 /tmp/start_beesyncclip_80.py 
+# 使用conda环境的Python启动服务器
+$PYTHON_PATH /tmp/start_beesyncclip_80.py 

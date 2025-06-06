@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# BeeSyncClip GUI 客户端启动脚本 - 直接连接版
+# BeeSyncClip GUI 客户端启动脚本 - PyQt5版本
 
-echo "🚀 BeeSyncClip GUI 客户端启动器 (直接连接)"
+echo "🚀 BeeSyncClip GUI 客户端启动器 (PyQt5版本)"
 echo "============================================"
 
 # 检查服务器连接 - 直接连接模式
@@ -34,11 +34,11 @@ fi
 
 # 检查Python依赖
 echo "🔍 检查依赖..."
-if python3 -c "import PyQt6, pyperclip" > /dev/null 2>&1; then
+if python3 -c "import PyQt5, pyperclip" > /dev/null 2>&1; then
     echo "✅ 依赖检查通过"
 else
     echo "❌ 缺少依赖，正在安装..."
-    pip install PyQt6 pyperclip requests
+    pip install PyQt5 pyperclip requests
 fi
 
 # 启动GUI客户端
@@ -53,7 +53,7 @@ echo ""
 # 设置环境变量供GUI客户端使用
 export BEESYNCCLIP_SERVER_URL="$SERVER_URL"
 
-# 启动PyQt6桌面客户端
-python3 desktop/main.py
+# 启动PyQt5客户端
+python3 client/main.py
 
 echo "👋 GUI客户端已关闭" 
