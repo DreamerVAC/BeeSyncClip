@@ -61,6 +61,7 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     is_active: bool = True
     devices: List[Device] = Field(default_factory=list)
+    total_clips: int = 0  # 用户剪贴板总数
     
     class Config:
         json_encoders = {
