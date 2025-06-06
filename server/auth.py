@@ -198,9 +198,39 @@ class AuthManager:
             redis_manager.set_device_online(user_id, device_id)
             
             return {
-                'user_id': user_id,
-                'device_id': device_id,
-                'username': payload.get('username')
+                "user_id": user_id,
+                "device_id": device_id,
+                "username": payload.get('username')
+            }
+            
+        except Exception as e:
+            logger.error(f"通过令牌获取用户信息失败: {e}")
+            return None
+
+    def get_user_info(self, username: str) -> Optional[Dict[str, Any]]:
+        """通过用户名获取用户信息"""
+        try:
+            if not redis_manager.is_connected():
+                return None
+            
+            # 查找用户
+            user_key = f"user:username:{username}"
+            user_id = redis_manager.redis_client.get(user_key)
+            
+            if not user_id:
+                return None
+            
+            # 获取用户信息
+            user_data = redis_manager.redis_client.hgetall(f"user:{user_id}")
+            if not user_data:
+                return None
+            
+            return {
+                "id": user_id,
+                "username": user_data.get('username'),
+                "email": user_data.get('email'),
+                "created_at": user_data.get('created_at'),
+                "is_active": user_data.get('is_active', 'True') == 'True'
             }
             
         except Exception as e:

@@ -1,10 +1,12 @@
 """
 BeeSyncClip Redis 数据管理器
+支持发布订阅实时同步
 """
 
 import json
 import redis
-from typing import List, Optional, Dict, Any
+import asyncio
+from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime, timedelta
 from loguru import logger
 
@@ -17,6 +19,9 @@ class RedisManager:
     
     def __init__(self):
         self.redis_client = None
+        self.pubsub_client = None
+        self.pubsub = None
+        self.subscribers = {}  # user_id -> callback functions
         self.connect()
     
     def connect(self) -> bool:
@@ -34,8 +39,22 @@ class RedisManager:
                 retry_on_timeout=redis_config.get('retry_on_timeout', True)
             )
             
+            # 创建发布订阅客户端
+            self.pubsub_client = redis.Redis(
+                host=redis_config.get('host', 'localhost'),
+                port=redis_config.get('port', 6379),
+                password=redis_config.get('password'),
+                db=redis_config.get('db', 0),
+                decode_responses=redis_config.get('decode_responses', True)
+            )
+            
             # 测试连接
             self.redis_client.ping()
+            self.pubsub_client.ping()
+            
+            # 初始化发布订阅
+            self.pubsub = self.pubsub_client.pubsub()
+            
             logger.info("Redis 连接成功")
             return True
             
@@ -52,7 +71,117 @@ class RedisManager:
         except:
             pass
         return False
-    
+
+    def publish_clipboard_sync(self, user_id: str, action: str, data: dict, source_device: str = None):
+        """发布剪贴板同步消息"""
+        try:
+            if not self.is_connected():
+                logger.error("Redis未连接，无法发布消息")
+                return False
+            
+            message = {
+                "action": action,  # add, delete, clear
+                "data": data,
+                "source_device": source_device,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            channel = f"clipboard_sync:{user_id}"
+            self.redis_client.publish(channel, json.dumps(message))
+            
+            logger.debug(f"发布同步消息: user={user_id}, action={action}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"发布同步消息失败: {e}")
+            return False
+
+    def subscribe_clipboard_sync(self, user_id: str, callback: Callable):
+        """订阅剪贴板同步消息"""
+        try:
+            if not self.is_connected():
+                logger.error("Redis未连接，无法订阅")
+                return False
+            
+            channel = f"clipboard_sync:{user_id}"
+            
+            # 保存回调函数
+            if user_id not in self.subscribers:
+                self.subscribers[user_id] = []
+            self.subscribers[user_id].append(callback)
+            
+            # 订阅频道
+            self.pubsub.subscribe(channel)
+            
+            logger.info(f"订阅剪贴板同步: user={user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"订阅剪贴板同步失败: {e}")
+            return False
+
+    def unsubscribe_clipboard_sync(self, user_id: str, callback: Callable = None):
+        """取消订阅剪贴板同步"""
+        try:
+            channel = f"clipboard_sync:{user_id}"
+            
+            if callback and user_id in self.subscribers:
+                # 移除特定回调
+                if callback in self.subscribers[user_id]:
+                    self.subscribers[user_id].remove(callback)
+                
+                # 如果没有回调了，取消订阅
+                if not self.subscribers[user_id]:
+                    self.pubsub.unsubscribe(channel)
+                    del self.subscribers[user_id]
+            else:
+                # 取消所有订阅
+                self.pubsub.unsubscribe(channel)
+                self.subscribers.pop(user_id, None)
+            
+            logger.info(f"取消订阅剪贴板同步: user={user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"取消订阅失败: {e}")
+            return False
+
+    async def listen_for_messages(self):
+        """监听Redis发布订阅消息"""
+        try:
+            if not self.pubsub:
+                return
+            
+            while True:
+                message = self.pubsub.get_message(timeout=1.0)
+                if message and message['type'] == 'message':
+                    try:
+                        # 解析消息
+                        channel = message['channel']
+                        data = json.loads(message['data'])
+                        
+                        # 提取用户ID
+                        user_id = channel.split(':')[1]
+                        
+                        # 调用回调函数
+                        if user_id in self.subscribers:
+                            for callback in self.subscribers[user_id]:
+                                try:
+                                    if asyncio.iscoroutinefunction(callback):
+                                        await callback(user_id, data)
+                                    else:
+                                        callback(user_id, data)
+                                except Exception as e:
+                                    logger.error(f"回调函数执行失败: {e}")
+                    
+                    except Exception as e:
+                        logger.error(f"处理订阅消息失败: {e}")
+                
+                await asyncio.sleep(0.01)  # 避免CPU占用过高
+                
+        except Exception as e:
+            logger.error(f"监听订阅消息失败: {e}")
+
     def save_clipboard_item(self, item: ClipboardItem) -> bool:
         """保存剪切板项"""
         try:
@@ -82,6 +211,20 @@ class RedisManager:
             # 限制历史记录数量
             max_history = config_manager.get('clipboard.max_history', 1000)
             self.redis_client.zremrangebyrank(user_key, 0, -(max_history + 1))
+            
+            # 🔥 发布同步消息
+            self.publish_clipboard_sync(
+                user_id=item.user_id,
+                action="add",
+                data={
+                    "clip_id": item.id,
+                    "content": item.content,
+                    "content_type": item.type.value if hasattr(item.type, 'value') else str(item.type),
+                    "created_at": item.created_at.isoformat(),
+                    "device_id": item.device_id
+                },
+                source_device=item.device_id
+            )
             
             logger.debug(f"保存剪切板项成功: {item.id}")
             return True
@@ -153,20 +296,39 @@ class RedisManager:
             logger.error(f"获取用户剪切板历史失败: {e}")
             return ClipboardHistory(items=[], total=0, page=page, per_page=per_page)
     
-    def delete_clipboard_item(self, user_id: str, item_id: str) -> bool:
-        """删除指定的剪切板项"""
+    def delete_clipboard_item(self, item_id: str) -> bool:
+        """删除指定的剪切板项（重载版本，不需要user_id）"""
         try:
             if not self.is_connected():
                 return False
             
-            user_key = f"clipboard:{user_id}"
             item_key = f"item:{item_id}"
             
-            # 从用户的有序集合中删除
-            self.redis_client.zrem(user_key, item_id)
+            # 获取项目数据以找到用户ID
+            item_data = self.redis_client.hgetall(item_key)
+            if not item_data:
+                return False
+            
+            user_id = item_data.get('user_id')
+            if user_id:
+                # 从用户的有序集合中删除
+                user_key = f"clipboard:{user_id}"
+                self.redis_client.zrem(user_key, item_id)
             
             # 删除具体的项目数据
             self.redis_client.delete(item_key)
+            
+            # 🔥 发布删除同步消息
+            if item_data and user_id:
+                self.publish_clipboard_sync(
+                    user_id=user_id,
+                    action="delete",
+                    data={
+                        "clip_id": item_id,
+                        "device_id": item_data.get('device_id')
+                    },
+                    source_device=item_data.get('device_id')
+                )
             
             logger.debug(f"删除剪切板项成功: {item_id}")
             return True
@@ -421,35 +583,6 @@ class RedisManager:
             
         except Exception as e:
             logger.error(f"清空用户剪贴板历史失败: {e}")
-            return False
-    
-    def delete_clipboard_item(self, item_id: str) -> bool:
-        """删除指定的剪切板项（重载版本，不需要user_id）"""
-        try:
-            if not self.is_connected():
-                return False
-            
-            item_key = f"item:{item_id}"
-            
-            # 获取项目数据以找到用户ID
-            item_data = self.redis_client.hgetall(item_key)
-            if not item_data:
-                return False
-            
-            user_id = item_data.get('user_id')
-            if user_id:
-                # 从用户的有序集合中删除
-                user_key = f"clipboard:{user_id}"
-                self.redis_client.zrem(user_key, item_id)
-            
-            # 删除具体的项目数据
-            self.redis_client.delete(item_key)
-            
-            logger.debug(f"删除剪切板项成功: {item_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"删除剪切板项失败: {e}")
             return False
 
 

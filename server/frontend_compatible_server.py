@@ -1,15 +1,18 @@
 """
 BeeSyncClip 前端兼容服务器
 保持与Mock服务器相同的API接口，但使用真实的后端逻辑
+支持WebSocket实时同步
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 import time
 import uuid
+import json
+import asyncio
 from loguru import logger
 from datetime import datetime
 
@@ -21,7 +24,7 @@ from shared.utils import get_device_info
 
 app = FastAPI(
     title="BeeSyncClip Frontend Compatible API",
-    description="与前端Mock服务器兼容的真实API服务",
+    description="与前端Mock服务器兼容的真实API服务，支持WebSocket实时同步",
     version="1.0.0"
 )
 
@@ -33,6 +36,124 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# WebSocket连接管理
+class WebSocketManager:
+    def __init__(self):
+        self.connections: Dict[str, Set[WebSocket]] = {}  # user_id -> set of websockets
+        self.user_connections: Dict[int, str] = {}  # websocket_id -> user_id
+        self.device_connections: Dict[int, str] = {}  # websocket_id -> device_id
+        self.redis_listener_task = None
+        self.redis_listener_started = False
+
+    def start_redis_listener(self):
+        """启动Redis消息监听器（仅在有事件循环时）"""
+        if not self.redis_listener_started and not self.redis_listener_task:
+            try:
+                self.redis_listener_task = asyncio.create_task(self._redis_message_listener())
+                self.redis_listener_started = True
+                logger.info("Redis消息监听器已启动")
+            except RuntimeError:
+                # 没有事件循环，稍后再启动
+                logger.debug("暂无事件循环，Redis监听器将在首次WebSocket连接时启动")
+
+    async def _redis_message_listener(self):
+        """Redis消息监听器"""
+        try:
+            await redis_manager.listen_for_messages()
+        except Exception as e:
+            logger.error(f"Redis消息监听器错误: {e}")
+
+    async def _handle_redis_sync_message(self, user_id: str, message_data: dict):
+        """处理Redis同步消息"""
+        try:
+            action = message_data.get("action")
+            data = message_data.get("data", {})
+            source_device = message_data.get("source_device")
+            
+            # 构造WebSocket消息
+            ws_message = {
+                "type": "clipboard_update",
+                "action": action,
+                "data": data,
+                "source_device": source_device,
+                "timestamp": message_data.get("timestamp")
+            }
+            
+            # 广播给该用户的所有设备（排除源设备）
+            await self.broadcast_to_user(user_id, ws_message, exclude_device=source_device)
+            
+        except Exception as e:
+            logger.error(f"处理Redis同步消息失败: {e}")
+
+    async def connect(self, websocket: WebSocket, user_id: str, device_id: str):
+        await websocket.accept()
+        
+        # 确保Redis监听器已启动
+        if not self.redis_listener_started:
+            self.start_redis_listener()
+        
+        if user_id not in self.connections:
+            self.connections[user_id] = set()
+        
+        self.connections[user_id].add(websocket)
+        ws_id = id(websocket)
+        self.user_connections[ws_id] = user_id
+        self.device_connections[ws_id] = device_id
+        
+        # 🔥 订阅Redis同步消息
+        redis_manager.subscribe_clipboard_sync(user_id, self._handle_redis_sync_message)
+        
+        logger.info(f"WebSocket连接建立: user={user_id}, device={device_id}")
+
+    async def disconnect(self, websocket: WebSocket):
+        ws_id = id(websocket)
+        user_id = self.user_connections.get(ws_id)
+        device_id = self.device_connections.get(ws_id)
+        
+        if user_id and user_id in self.connections:
+            self.connections[user_id].discard(websocket)
+            if not self.connections[user_id]:
+                del self.connections[user_id]
+                # 🔥 取消Redis订阅（如果没有其他连接）
+                redis_manager.unsubscribe_clipboard_sync(user_id, self._handle_redis_sync_message)
+        
+        self.user_connections.pop(ws_id, None)
+        self.device_connections.pop(ws_id, None)
+        
+        logger.info(f"WebSocket连接断开: user={user_id}, device={device_id}")
+
+    async def broadcast_to_user(self, user_id: str, message: dict, exclude_device: str = None):
+        """向用户的所有设备广播消息（可排除指定设备）"""
+        if user_id not in self.connections:
+            return
+        
+        message_json = json.dumps(message)
+        disconnected = set()
+        
+        for websocket in self.connections[user_id]:
+            try:
+                ws_id = id(websocket)
+                device_id = self.device_connections.get(ws_id)
+                
+                # 排除指定设备
+                if exclude_device and device_id == exclude_device:
+                    continue
+                
+                await websocket.send_text(message_json)
+                logger.debug(f"消息已发送到设备: {device_id}")
+                
+            except Exception as e:
+                logger.warning(f"发送消息失败: {e}")
+                disconnected.add(websocket)
+        
+        # 清理断开的连接
+        for websocket in disconnected:
+            await self.disconnect(websocket)
+
+# 全局WebSocket管理器
+websocket_manager = WebSocketManager()
 
 
 # 请求数据模型
@@ -99,10 +220,12 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "message": "BeeSyncClip 跨平台同步剪贴板服务",
+        "features": ["REST API", "WebSocket实时同步"],
         "endpoints": {
             "health": "/health",
             "register": "/register",
             "login": "/login",
+            "websocket": "/ws/{user_id}/{device_id}",
             "docs": "/docs"
         }
     }
@@ -115,6 +238,9 @@ async def health_check():
         # 检查Redis连接
         redis_status = "connected" if redis_manager.is_connected() else "disconnected"
         
+        # 统计WebSocket连接数
+        ws_connections = sum(len(connections) for connections in websocket_manager.connections.values())
+        
         return {
             "status": "healthy",
             "service": "BeeSyncClip",
@@ -122,7 +248,8 @@ async def health_check():
             "timestamp": datetime.now().isoformat(),
             "components": {
                 "redis": redis_status,
-                "api": "running"
+                "api": "running",
+                "websocket": f"{ws_connections} connections"
             },
             "server_info": {
                 "host": "47.110.154.99",
@@ -333,115 +460,123 @@ async def remove_device(request: RemoveDeviceRequest):
 
 @app.post("/add_clipboard")
 async def add_clipboard(request: AddClipboardRequest):
-    """添加剪贴板内容 - 兼容Mock服务器格式"""
+    """添加剪贴板内容（通过Redis发布订阅实现实时同步）"""
     try:
         username = request.username
         content = request.content
         device_id = request.device_id
         content_type = request.content_type
         
-        # 根据用户名获取用户ID
-        user = redis_manager.get_user_by_username(username)
-        if not user:
-            return error_response("用户未找到", 404)
+        # 参数验证
+        if not username or not content:
+            return error_response("用户名和内容不能为空")
+        
+        # 获取用户信息
+        user_info = auth_manager.get_user_info(username)
+        if not user_info:
+            return error_response("用户不存在", 404)
+        
+        user_id = user_info.get('id', username)
+        
+        # 检查Redis连接
+        if not redis_manager.is_connected():
+            logger.error("Redis连接失败")
+            return error_response("服务暂时不可用，请稍后重试", 503)
         
         # 创建剪贴板项数据
         clip_id = str(uuid.uuid4())
         item_data = {
-            "id": clip_id,
-            "content": content,
-            "content_type": content_type,
-            "device_id": device_id,
-            "user_id": user['id'],
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            'id': clip_id,
+            'content': content,
+            'content_type': content_type,
+            'device_id': device_id,
+            'user_id': user_id,
+            'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'updated_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # 直接存储到Redis
-        if not redis_manager.is_connected():
-            return error_response("Redis连接失败", 500)
-        
-        # 保存剪贴板项
+        # 保存到Redis
         item_key = f"item:{clip_id}"
-        user_key = f"clipboard:{user['id']}"
+        user_key = f"clipboard:{user_id}"
         
-        # 存储项目数据
+        # 保存项目数据
         redis_manager.redis_client.hset(item_key, mapping=item_data)
         
-        # 添加到用户的有序集合中
+        # 添加到用户的剪贴板列表（按时间排序）
         score = datetime.now().timestamp()
         redis_manager.redis_client.zadd(user_key, {clip_id: score})
         
-        # 设置过期时间
+        # 设置过期时间（24小时）
         redis_manager.redis_client.expire(item_key, 86400)
         redis_manager.redis_client.expire(user_key, 86400)
         
-        # 获取用户所有剪贴板内容
-        item_ids = redis_manager.redis_client.zrevrange(user_key, 0, 99)
+        # 🔥 通过Redis发布订阅自动同步到所有设备
+        redis_manager.publish_clipboard_sync(
+            user_id=user_id,
+            action="add",
+            data={
+                "clip_id": clip_id,
+                "content": content,
+                "content_type": content_type,
+                "created_at": item_data["created_at"],
+                "device_id": device_id
+            },
+            source_device=device_id
+        )
         
-        clipboards_list = []
-        for item_id in item_ids:
-            item_key = f"item:{item_id}"
-            item_data = redis_manager.redis_client.hgetall(item_key)
-            if item_data:
-                clipboards_list.append({
-                    "clip_id": item_data['id'],
-                    "content": item_data['content'],
-                    "content_type": item_data.get('content_type', 'text/plain'),
-                    "created_at": item_data['created_at'],
-                    "last_modified": item_data['updated_at'],
-                    "device_id": item_data['device_id']
-                })
+        logger.info(f"剪贴板添加成功: user={user_id}, device={device_id}, redis_sync=enabled")
         
         return success_response({
             "success": True,
             "message": "剪贴板内容添加成功",
             "clip_id": clip_id,
-            "clipboards": clipboards_list
-        }, 201)
-            
+            "sync_method": "redis_pubsub",
+            "websocket_connections": len(websocket_manager.connections.get(user_id, set()))
+        })
+        
     except Exception as e:
-        logger.error(f"添加剪贴板内容错误: {e}")
+        logger.error(f"添加剪贴板内容失败: {e}")
         return error_response("添加剪贴板内容过程中发生错误", 500)
 
 
 @app.post("/delete_clipboard")
 async def delete_clipboard(request: DeleteClipboardRequest):
-    """删除剪贴板内容 - 兼容Mock服务器格式"""
+    """删除剪贴板内容（通过Redis发布订阅实现实时同步）"""
     try:
         username = request.username
         clip_id = request.clip_id
         
-        # 根据用户名获取用户ID
-        user = redis_manager.get_user_by_username(username)
-        if not user:
-            return error_response("用户未找到", 404)
+        # 参数验证
+        if not username or not clip_id:
+            return error_response("用户名和剪贴板ID不能为空")
         
-        # 获取剪贴板项信息用于显示
-        item_key = f"item:{clip_id}"
-        item_data = redis_manager.redis_client.hgetall(item_key)
-        if not item_data:
-            return error_response("剪贴板内容未找到", 404)
+        # 获取用户信息
+        user_info = auth_manager.get_user_info(username)
+        if not user_info:
+            return error_response("用户不存在", 404)
         
-        # 删除剪贴板项
-        user_key = f"clipboard:{user['id']}"
-        redis_manager.redis_client.zrem(user_key, clip_id)
-        redis_manager.redis_client.delete(item_key)
+        user_id = user_info.get('id', username)
         
-        # 获取剩余的剪贴板数量
-        remaining_count = redis_manager.redis_client.zcard(user_key)
+        # 检查Redis连接
+        if not redis_manager.is_connected():
+            return error_response("服务暂时不可用，请稍后重试", 503)
         
-        deleted_content = item_data['content'][:50] + "..." if len(item_data['content']) > 50 else item_data['content']
+        # 删除剪贴板项（Redis管理器会自动发布同步消息）
+        success = redis_manager.delete_clipboard_item(clip_id)
         
-        return success_response({
-            "success": True,
-            "message": f"剪贴板内容删除成功: '{deleted_content}'",
-            "clip_id": clip_id,
-            "remaining_clips": remaining_count
-        })
-            
+        if success:
+            logger.info(f"剪贴板删除成功: user={user_id}, clip_id={clip_id}")
+            return success_response({
+                "success": True,
+                "message": "剪贴板内容删除成功",
+                "clip_id": clip_id,
+                "sync_method": "redis_pubsub"
+            })
+        else:
+            return error_response("删除失败，剪贴板项不存在", 404)
+        
     except Exception as e:
-        logger.error(f"删除剪贴板内容错误: {e}")
+        logger.error(f"删除剪贴板内容失败: {e}")
         return error_response("删除剪贴板内容过程中发生错误", 500)
 
 
@@ -560,6 +695,161 @@ async def get_clipboards(username: str):
     except Exception as e:
         logger.error(f"获取剪贴板内容错误: {e}")
         return error_response("获取剪贴板内容过程中发生错误", 500)
+
+
+@app.websocket("/ws/{user_id}/{device_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str, device_id: str):
+    """WebSocket端点，用于实时同步"""
+    await websocket_manager.connect(websocket, user_id, device_id)
+    
+    try:
+        while True:
+            # 接收客户端消息
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            message_type = message.get("type")
+            
+            if message_type == "ping":
+                # 心跳响应
+                await websocket.send_text(json.dumps({
+                    "type": "pong",
+                    "timestamp": datetime.now().isoformat()
+                }))
+                
+            elif message_type == "clipboard_sync":
+                # 剪贴板同步
+                await handle_websocket_clipboard_sync(websocket, message, user_id, device_id)
+                
+            elif message_type == "request_history":
+                # 请求历史记录
+                await handle_websocket_history_request(websocket, user_id)
+                
+            else:
+                logger.warning(f"未知WebSocket消息类型: {message_type}")
+                
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket客户端断开连接: user={user_id}, device={device_id}")
+    except Exception as e:
+        logger.error(f"WebSocket处理错误: {e}")
+    finally:
+        await websocket_manager.disconnect(websocket)
+
+
+async def handle_websocket_clipboard_sync(websocket: WebSocket, message: dict, user_id: str, device_id: str):
+    """处理WebSocket剪贴板同步"""
+    try:
+        content = message.get("content")
+        content_type = message.get("content_type", "text/plain")
+        
+        if not content:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "message": "内容不能为空"
+            }))
+            return
+        
+        # 创建剪贴板项数据
+        clip_id = str(uuid.uuid4())
+        item_data = {
+            "id": clip_id,
+            "content": content,
+            "content_type": content_type,
+            "device_id": device_id,
+            "user_id": user_id,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # 保存到Redis
+        if not redis_manager.is_connected():
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "message": "Redis连接失败"
+            }))
+            return
+        
+        item_key = f"item:{clip_id}"
+        user_key = f"clipboard:{user_id}"
+        
+        redis_manager.redis_client.hset(item_key, mapping=item_data)
+        score = datetime.now().timestamp()
+        redis_manager.redis_client.zadd(user_key, {clip_id: score})
+        redis_manager.redis_client.expire(item_key, 86400)
+        redis_manager.redis_client.expire(user_key, 86400)
+        
+        # 广播给其他设备
+        sync_message = {
+            "type": "clipboard_update",
+            "action": "add",
+            "data": {
+                "clip_id": clip_id,
+                "content": content,
+                "content_type": content_type,
+                "created_at": item_data["created_at"],
+                "device_id": device_id,
+                "source_device": device_id
+            }
+        }
+        
+        await websocket_manager.broadcast_to_user(user_id, sync_message, exclude_device=device_id)
+        
+        # 确认消息给发送方
+        await websocket.send_text(json.dumps({
+            "type": "clipboard_sync_ack",
+            "clip_id": clip_id,
+            "message": "同步成功"
+        }))
+        
+        logger.info(f"WebSocket剪贴板同步成功: user={user_id}, device={device_id}")
+        
+    except Exception as e:
+        logger.error(f"WebSocket剪贴板同步失败: {e}")
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": "同步失败"
+        }))
+
+
+async def handle_websocket_history_request(websocket: WebSocket, user_id: str):
+    """处理WebSocket历史记录请求"""
+    try:
+        if not redis_manager.is_connected():
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "message": "Redis连接失败"
+            }))
+            return
+        
+        user_key = f"clipboard:{user_id}"
+        item_ids = redis_manager.redis_client.zrevrange(user_key, 0, 49)  # 最近50条
+        
+        clipboards_list = []
+        for item_id in item_ids:
+            item_key = f"item:{item_id}"
+            item_data = redis_manager.redis_client.hgetall(item_key)
+            if item_data:
+                clipboards_list.append({
+                    "clip_id": item_data['id'],
+                    "content": item_data['content'],
+                    "content_type": item_data.get('content_type', 'text/plain'),
+                    "created_at": item_data['created_at'],
+                    "last_modified": item_data['updated_at'],
+                    "device_id": item_data['device_id']
+                })
+        
+        await websocket.send_text(json.dumps({
+            "type": "history_response",
+            "clipboards": clipboards_list,
+            "count": len(clipboards_list)
+        }))
+        
+    except Exception as e:
+        logger.error(f"WebSocket历史记录请求失败: {e}")
+        await websocket.send_text(json.dumps({
+            "type": "error", 
+            "message": "获取历史记录失败"
+        }))
 
 
 if __name__ == "__main__":
