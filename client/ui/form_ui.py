@@ -4,6 +4,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from page1_clipboard import Ui_Dialog, ClipboardDialog
 from page2_device import DeviceDialog
 from page3_login import LoginDialog  # 修改为导入LoginDialog类
+from page5_userinfo import UserInfoDialog
 
 
 class Ui_app_ui(object):
@@ -38,7 +39,7 @@ class Ui_app_ui(object):
         self.btn_device = QtWidgets.QPushButton("设备")
         self.btn_login = QtWidgets.QPushButton("登录")
 
-        # 设置按钮样式
+        # 定义导航按钮样式
         nav_btn_style = """
             QPushButton {
                 padding: 10px;
@@ -52,6 +53,16 @@ class Ui_app_ui(object):
                 background-color: #d0d0d0;
             }
         """
+
+        # 在导航栏中添加用户信息按钮
+        self.btn_userinfo = QtWidgets.QPushButton("用户信息")
+        self.btn_userinfo.setStyleSheet(nav_btn_style)
+        self.btn_userinfo.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.nav_layout.addWidget(self.btn_userinfo)
+        self.btn_userinfo.hide()  # 初始隐藏
+        self.btn_userinfo.clicked.connect(self.show_page_4)  # 绑定点击事件
+
+        # 设置按钮样式
         for btn in [self.btn_clipboard, self.btn_device, self.btn_login]:
             btn.setStyleSheet(nav_btn_style)
             btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
@@ -125,6 +136,13 @@ class Ui_app_ui(object):
         layout.addWidget(self.login_dialog)
         self.stackedWidget.addWidget(self.page_3)
 
+        self.page_4 = QtWidgets.QWidget()
+        self.page_4.setObjectName("page_4")
+        self.userinfo_dialog = UserInfoDialog()  # 导入UserInfoDialog
+        layout = QtWidgets.QVBoxLayout(self.page_4)
+        layout.addWidget(self.userinfo_dialog)
+        self.stackedWidget.addWidget(self.page_4)
+
     def retranslateUi(self, app_ui):
         _translate = QtCore.QCoreApplication.translate
         app_ui.setWindowTitle(_translate("app_ui", "BeeSyncClip"))
@@ -148,9 +166,22 @@ class Ui_app_ui(object):
         self.stackedWidget.setCurrentIndex(3)
         self.update_nav_btn_style(self.btn_login)
 
+    def show_page_4(self):
+        """显示用户信息页面"""
+        self.stackedWidget.setCurrentIndex(4)  # page_4 是用户信息页面
+        self.update_nav_btn_style(self.btn_userinfo)
+
     def update_nav_btn_style(self, active_btn):
         """更新导航按钮样式，突出显示当前活动按钮"""
-        for btn in [self.btn_clipboard, self.btn_device, self.btn_login]:
+        # 包含所有导航按钮
+        all_buttons = [
+            self.btn_clipboard,
+            self.btn_device,
+            self.btn_login,
+            self.btn_userinfo  # 添加用户信息按钮
+        ]
+
+        for btn in all_buttons:
             if btn == active_btn:
                 btn.setStyleSheet("""
                     QPushButton {
@@ -184,18 +215,22 @@ class MainWindow(QtWidgets.QWidget):
         self.ui.setupUi(self)
 
         # 监听登录成功信号
+        self.connect_login_signals()
+        self.is_logged_in = False
+
+    def connect_login_signals(self):
+        """连接登录成功的信号"""
         self.ui.login_dialog.accepted.connect(self.on_login_success)
 
     def on_login_success(self):
         """登录成功后设置用户信息"""
+        self.is_logged_in = True
+
         login_dialog = self.ui.login_dialog
         api_url = login_dialog.api_url
         username = login_dialog.get_current_username()
         device_info = login_dialog.get_device_info()
         token = login_dialog.get_token()
-
-        # 打印调试信息
-        print(f"[DEBUG] Login success! api_url={api_url}, username={username}, token_len={len(token) if token else 0}")
 
         # 设置设备对话框的用户信息
         self.ui.device_dialog.set_user_info(api_url, username, device_info.get('device_id'), token)
@@ -209,11 +244,104 @@ class MainWindow(QtWidgets.QWidget):
             token
         )
 
+        # 设置用户信息页面 - 直接传入必要参数
+        self.ui.userinfo_dialog.set_user_info(
+            username,
+            device_info.get('label', '当前设备')
+        )
+
+        # 连接退出登录信号
+        self.ui.userinfo_dialog.logout_requested.connect(self.handle_logout)
+
+        # 显示用户信息按钮
+        self.ui.btn_userinfo.show()
+        self.ui.btn_login.hide()
+        self.ui.show_page_4()  # 切换到用户信息页面
+
+    def handle_logout(self):
+        """处理退出登录"""
+        self.is_logged_in = False
+
+        # 重置各页面状态
+        self.reset_clipboard_page()
+        self.reset_device_page()
+        self.reset_login_page()
+        self.reset_userinfo_page()  # 添加用户信息页面重置
+
+        # 更新导航栏
+        self.ui.btn_userinfo.hide()
+        self.ui.btn_login.show()
+
+        # 切换到登录页面
+        self.ui.stackedWidget.setCurrentIndex(3)
+        self.ui.update_nav_btn_style(self.ui.btn_login)
+
+    def reset_clipboard_page(self):
+        """重置剪贴板页面到初始状态"""
+        # 停止任何正在运行的剪贴板同步
+        self.ui.clipboard_dialog.stop_sync()
+
+        # 清除剪贴板列表 - 直接访问 listWidget
+        self.ui.clipboard_dialog.listWidget.clear()  # 修改这里
+
+        # 重置用户信息
+        self.ui.clipboard_dialog.set_user_info(None, None, None, None, None)
+
+    def reset_device_page(self):
+        """重置设备页面到初始状态"""
+        # 停止任何设备刷新
+        self.ui.device_dialog.stop_refresh()
+
+        # 清除设备列表 - 使用正确的控件名称
+        self.ui.device_dialog.ui.listWidget.clear()  # 修改这里
+
+        # 重置用户信息
+        self.ui.device_dialog.set_user_info(None, None, None, None)
+
+    def reset_login_page(self):
+        """重置登录页面到初始状态 - 完全重新初始化登录对话框"""
+        # 从堆叠窗口移除旧登录页面
+        self.ui.stackedWidget.removeWidget(self.ui.page_3)
+
+        # 创建全新的登录页面
+        self.ui.page_3 = QtWidgets.QWidget()
+        self.ui.page_3.setObjectName("page_3")
+
+        # 创建新的登录对话框实例
+        self.ui.login_dialog = LoginDialog()
+
+        # 将新登录对话框添加到页面
+        layout = QtWidgets.QVBoxLayout(self.ui.page_3)
+        layout.addWidget(self.ui.login_dialog)
+
+        # 将新页面添加到堆叠窗口（保持原来的索引位置）
+        self.ui.stackedWidget.insertWidget(3, self.ui.page_3)
+
+        # 重新连接登录成功信号
+        self.connect_login_signals()
+
+        # 确保登录页面是初始状态
+        self.ui.login_dialog.reset_state()
+
+    def reset_userinfo_page(self):
+        """重置用户信息页面"""
+        # 重新创建用户信息对话框
+        self.ui.stackedWidget.removeWidget(self.ui.page_4)
+
+        self.ui.page_4 = QtWidgets.QWidget()
+        self.ui.page_4.setObjectName("page_4")
+        self.ui.userinfo_dialog = UserInfoDialog()
+        layout = QtWidgets.QVBoxLayout(self.ui.page_4)
+        layout.addWidget(self.ui.userinfo_dialog)
+        self.ui.stackedWidget.insertWidget(4, self.ui.page_4)
+
+        # 重新连接退出信号
+        self.ui.userinfo_dialog.logout_requested.connect(self.handle_logout)
+
 
 if __name__ == "__main__":
     import sys
     import traceback
-
 
 
     def excepthook(exc_type, exc_value, exc_traceback):
