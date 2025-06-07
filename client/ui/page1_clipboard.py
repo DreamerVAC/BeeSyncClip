@@ -139,6 +139,9 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
         super().__init__(parent)
         self.setupUi(self)
 
+        # 添加标志位，用于标记是否忽略剪贴板变化
+        self.ignore_clipboard_change = False  # <-- 新增标志位
+
         self.api_url = None
         self.username = None
         self.device_id = None
@@ -203,10 +206,13 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
         content_layout.addWidget(scroll_area, 1)
 
         btn_layout = QtWidgets.QVBoxLayout()
-        copy_btn = QtWidgets.QPushButton("复制")
-        copy_btn.setFixedSize(80, 30)
-        copy_btn.clicked.connect(lambda: self.copy_content(record.get('content', '')))
-        btn_layout.addWidget(copy_btn)
+
+        # 新增的内容复制按钮
+        content_copy_btn = QtWidgets.QPushButton("复制")
+        content_copy_btn.setFixedSize(80, 30)
+        content_copy_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        content_copy_btn.clicked.connect(lambda: self.copy_content_only(record.get('content', '')))
+        btn_layout.addWidget(content_copy_btn)
 
         delete_btn = QtWidgets.QPushButton("删除")
         delete_btn.setFixedSize(80, 30)
@@ -219,9 +225,16 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
 
-    def copy_content(self, content):
+    def copy_content_only(self, content):
+        # 设置忽略标志
+        self.ignore_clipboard_change = True  # <-- 设置标志位
+
+        # 执行复制操作
         self.clipboard.setText(content)
-        self.update_status(f"已复制: {content[:20]}...")
+        self.update_status(f"已复制内容: {content[:20]}...")
+
+        # 重置标志位（使用单次定时器，确保只忽略当前这次变化）
+        QtCore.QTimer.singleShot(100, lambda: setattr(self, 'ignore_clipboard_change', False))
 
     def confirm_remove_record(self, item):
         record = item.data(QtCore.Qt.UserRole)
@@ -295,6 +308,10 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
         self.clipboard.dataChanged.connect(self.on_clipboard_changed)
 
     def on_clipboard_changed(self):
+        # 如果设置了忽略标志，则不处理这次变化
+        if self.ignore_clipboard_change:  # <-- 检查标志位
+            return
+
         if self.clipboard.mimeData().hasText():
             current_text = self.clipboard.text()
             if current_text != self.last_clipboard_text:
@@ -336,3 +353,8 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
 
     def update_status(self, message):
         self.statusLabel.setText(message)
+
+    def stop_sync(self):
+        """停止剪贴板同步"""
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
