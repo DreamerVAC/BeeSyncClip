@@ -9,7 +9,24 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import platform
 import uuid
 import os
+import socket
 
+def get_local_ip():
+    """获取本机局域网IP地址"""
+    s = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            ip = "127.0.0.1"
+    finally:
+        if s:
+            s.close()
+    return ip
 
 class RegisterThread(QThread):
     finished = pyqtSignal(dict)
@@ -26,6 +43,7 @@ class RegisterThread(QThread):
             self.finished.emit(response.json())
         except Exception as e:
             self.error.emit(str(e))
+
 class Ui_LoginDialog(object):
     def setupUi(self, LoginDialog):
         LoginDialog.setObjectName("LoginDialog")
@@ -147,22 +165,17 @@ class LoginDialog(QtWidgets.QDialog):
         hostname = socket.gethostname()
         os_info = platform.system()
         os_version = platform.release()
-        ip_address = socket.gethostbyname(socket.gethostname())
-        mac = ":".join(["{:02x}".format((uuid.getnode() >> elements) & 0xff)
-                       for elements in range(0, 2 * 6, 2)][::-1])
-
-        # 生成设备唯一ID
-        unique_str = f"{hostname}-{mac}-{os_info}-{os_version}"
-        device_id = hashlib.md5(unique_str.encode()).hexdigest()
+        ip_address = get_local_ip()  # 使用新的函数获取IP
+        mac_address = ":".join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0, 8*6, 8)][::-1])
 
         return {
-            "device_id": device_id,
+            "device_id": self.device_id, # 使用持久化ID
             "device_name": hostname,
-            "os": os_info,
-            "os_version": os_version,
+            "platform": os_info,
+            "version": os_version,
             "ip_address": ip_address,
-            "mac_address": mac,
-            "label": f"{hostname} ({os_info})"  # 确保包含label字段
+            "mac_address": mac_address,
+            "label": f"{hostname} ({os_info})"
         }
 
     def on_login_clicked(self):
@@ -170,12 +183,7 @@ class LoginDialog(QtWidgets.QDialog):
         username = self.ui.lineEdit_username.text().strip()
         password = self.ui.lineEdit_password.text().strip()
 
-        device_info = {
-            "device_id": self.device_id,
-            "device_name": platform.node(),
-            "platform": platform.system(),
-            "version": platform.release()
-        }
+        device_info = self.get_device_info()
 
         if not username or not password:
             self.ui.login_feedback_label.setText("请输入用户名和密码")
