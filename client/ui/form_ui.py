@@ -84,9 +84,53 @@ class Ui_app_ui(object):
         self.stackedWidget = QtWidgets.QStackedWidget()
         self.stackedWidget.setObjectName("stackedWidget")
 
-        # 创建初始空白页面
+        # 创建初始空白页面 - 添加emoji图案
         self.blank_page = QtWidgets.QWidget()
         self.blank_page.setObjectName("blank_page")
+
+        # 添加垂直布局
+        blank_layout = QtWidgets.QVBoxLayout(self.blank_page)
+        blank_layout.setContentsMargins(0, 0, 0, 0)
+        blank_layout.setSpacing(20)
+
+        # 添加居中的emoji标签
+        self.emoji_label = QtWidgets.QLabel()
+        self.emoji_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.emoji_label.setStyleSheet("""
+            QLabel {
+                font-size: 100px;
+            }
+        """)
+        self.emoji_label.setText("🐝")  # 蜜蜂emoji
+
+        # 添加欢迎文本
+        self.welcome_label = QtWidgets.QLabel("欢迎使用 BeeSyncClip")
+        self.welcome_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.welcome_label.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                font-weight: bold;
+                color: #555555;
+            }
+        """)
+
+        # 添加提示文本
+        self.hint_label = QtWidgets.QLabel("请点击左侧登录按钮开始使用")
+        self.hint_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.hint_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: #888888;
+            }
+        """)
+
+        # 添加到布局
+        blank_layout.addStretch(1)  # 顶部弹性空间
+        blank_layout.addWidget(self.emoji_label)
+        blank_layout.addWidget(self.welcome_label)
+        blank_layout.addWidget(self.hint_label)
+        blank_layout.addStretch(1)  # 底部弹性空间
+
         self.stackedWidget.addWidget(self.blank_page)
 
         # 初始化所有子页面
