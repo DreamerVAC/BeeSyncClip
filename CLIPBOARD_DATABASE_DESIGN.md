@@ -97,9 +97,9 @@ HSET item:uuid-123
 **Key**: `user:{username}`
 
 ```redis
-HSET user:testuser
+HSET user:example_user
   "id" "user-789"
-  "username" "testuser"
+  "username" "example_user"
   "password_hash" "$2b$12$..."
   "created_at" "2024-12-19T10:00:00"
 ```

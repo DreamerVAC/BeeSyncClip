@@ -866,7 +866,7 @@ if __name__ == "__main__":
     print("🚀 启动BeeSyncClip前端兼容服务器...")
     print("✅ Redis连接正常")
     print("🌐 访问地址: http://47.110.154.99:8000")
-    print("📱 测试账号: testuser / test123")
+    print("📱 新用户请在客户端界面进行注册")
     print("🎯 Ready for production!")
     
     uvicorn.run(

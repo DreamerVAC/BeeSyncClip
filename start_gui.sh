@@ -45,8 +45,7 @@ fi
 echo "🎨 启动GUI客户端..."
 echo ""
 echo "📱 登录信息:"
-echo "   用户名: testuser"
-echo "   密码: test123"
+echo "   新用户请在界面中注册账号"
 echo "   服务器: $SERVER_URL"
 echo ""
 

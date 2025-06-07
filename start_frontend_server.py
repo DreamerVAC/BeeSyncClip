@@ -29,16 +29,6 @@ def check_dependencies():
     
     logger.info("✅ Redis连接正常")
     
-    # 初始化测试用户
-    try:
-        test_user = auth_manager.register_user("testuser", "test123")
-        if test_user:
-            logger.info("✅ 测试用户创建成功")
-        else:
-            logger.info("ℹ️ 测试用户已存在")
-    except Exception as e:
-        logger.warning(f"测试用户创建警告: {e}")
-    
     return True
 
 
@@ -66,9 +56,7 @@ def main():
         
         logger.info("🌐 服务器信息:")
         logger.info("   地址: http://47.110.154.99:8000")
-        logger.info("   测试账号: testuser")
-        logger.info("   测试密码: test123")
-        logger.info("📱 现在可以使用前端界面连接到真实后端服务器！")
+        logger.info("📱 新用户请在客户端界面进行注册")
         
     except KeyboardInterrupt:
         logger.info("👋 服务器已停止")

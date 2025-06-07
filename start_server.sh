@@ -1,29 +1,27 @@
 #!/bin/bash
 
-# BeeSyncClip 服务器启动脚本
+# BeeSyncClip 后端服务器启动脚本
 
-echo "🚀 启动 BeeSyncClip 服务器..."
+echo "🚀 BeeSyncClip 后端服务器"
+echo "========================="
 
-# 检查Redis是否运行
-if ! redis-cli ping > /dev/null 2>&1; then
-    echo "❌ Redis 未运行，请先启动 Redis 服务"
-    exit 1
-fi
-
-echo "✅ Redis 连接正常"
-
-# 检查端口是否被占用
-if netstat -tuln | grep :8000 > /dev/null 2>&1; then
-    echo "⚠️  端口 8000 已被占用，尝试停止现有进程..."
-    pkill -f "start_frontend_server.py" || true
+# 检查Redis服务
+echo "🔍 检查Redis服务..."
+if ! systemctl is-active --quiet redis; then
+    echo "⚠️ Redis服务未运行，正在启动..."
+    sudo systemctl start redis
     sleep 2
 fi
 
-# 启动服务器
-echo "🌐 启动服务器在端口 8000..."
-echo "📱 测试账号: testuser / test123"
-echo "🔗 服务器地址: http://47.110.154.99:8000"
-echo "📋 按 Ctrl+C 停止服务器"
-echo ""
+if systemctl is-active --quiet redis; then
+    echo "✅ Redis服务正常运行"
+else
+    echo "❌ Redis服务启动失败！"
+    exit 1
+fi
 
-python start_frontend_server.py 
+# 启动服务器
+echo "🎯 启动BeeSyncClip服务器..."
+echo "📱 新用户请在客户端界面进行注册"
+
+python3 start_frontend_server.py 
