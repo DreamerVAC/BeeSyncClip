@@ -272,6 +272,9 @@ async def health_check():
 async def login(request: LoginRequest):
     """用户登录 - 兼容Mock服务器格式"""
     try:
+        # 增加详细的请求日志
+        logger.debug(f"收到登录请求: username={request.username}, device_info={request.device_info}")
+
         username = request.username
         password = request.password
         device_info = request.device_info
@@ -636,8 +639,8 @@ async def get_devices(username: str):
                 "label": device.get("name"),
                 "os": device.get("os_info"),
                 "ip_address": device.get("ip_address"),
-                "first_login": device.get("created_at"),
-                "last_login": device.get("last_seen")
+                "first_login": device.get("created_at").isoformat() if device.get("created_at") else None,
+                "last_login": device.get("last_seen").isoformat() if device.get("last_seen") else None
             })
         
         return success_response({

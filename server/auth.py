@@ -133,37 +133,59 @@ class AuthManager:
             
             # 创建或更新设备信息
             device_info = auth_request.device_info
-            device = Device(
-                name=device_info.get('hostname', 'Unknown Device'),
-                platform=device_info.get('platform', 'Unknown'),
-                version=device_info.get('platform_version', 'Unknown'),
-                user_id=user_id,
-                is_online=True
-            )
+            logger.info(f"接收到的设备信息: {device_info}")
+            device_id = device_info.get('device_id')
+
+            # 检查设备是否已存在
+            device_key = f"device:{device_id}"
+            existing_device_data = redis_manager.redis_client.hgetall(device_key)
             
-            # 保存设备信息
-            device_data = device.dict()
-            device_data['last_seen'] = device.last_seen.isoformat()
-            
-            # 转换布尔值为字符串，确保Redis兼容性
-            for key, value in device_data.items():
-                if isinstance(value, bool):
-                    device_data[key] = str(value)
-                elif isinstance(value, list):
-                    device_data[key] = str(value)
-            
-            redis_manager.redis_client.hset(f"device:{device.id}", mapping=device_data)
-            
+            if existing_device_data:
+                # 更新现有设备信息
+                device_data = existing_device_data
+                device_data['last_seen'] = datetime.now().isoformat()
+                device_data['is_online'] = 'True'
+                device_data['ip_address'] = device_info.get('ip_address', device_data.get('ip_address', '0.0.0.0'))
+                device_data['os_info'] = f"{device_info.get('platform', 'Unknown')} {device_info.get('version', '')}".strip()
+                redis_manager.redis_client.hset(device_key, mapping=device_data)
+                device_id_to_use = device_id
+            else:
+                # 创建新设备
+                os_info = f"{device_info.get('platform', 'Unknown')} {device_info.get('version', '')}".strip()
+                device = Device(
+                    id=device_id, # 使用客户端传来的ID
+                    name=device_info.get('hostname') or device_info.get('device_name', 'Unknown Device'),
+                    os_info=os_info,
+                    ip_address=device_info.get('ip_address', '0.0.0.0'),
+                    user_id=user_id,
+                    is_online=True
+                )
+                
+                # 保存设备信息
+                device_data = device.dict()
+                device_data['created_at'] = device.created_at.isoformat()
+                device_data['last_seen'] = device.last_seen.isoformat()
+                
+                # 转换布尔值为字符串
+                for key, value in device_data.items():
+                    if isinstance(value, bool):
+                        device_data[key] = str(value)
+                    elif isinstance(value, list):
+                        device_data[key] = str(value)
+                
+                redis_manager.redis_client.hset(device_key, mapping=device_data)
+                device_id_to_use = device.id
+
             # 将设备ID添加到用户的设备列表中
-            redis_manager.redis_client.sadd(f"devices:{user_id}", device.id)
+            redis_manager.redis_client.sadd(f"devices:{user_id}", device_id_to_use)
             
             # 设置设备在线状态
-            redis_manager.set_device_online(user_id, device.id)
+            redis_manager.set_device_online(user_id, device_id_to_use)
             
             # 创建访问令牌
             token_data = {
                 "user_id": user_id,
-                "device_id": device.id,
+                "device_id": device_id_to_use,
                 "username": auth_request.username
             }
             access_token = self.create_access_token(token_data)
@@ -176,7 +198,7 @@ class AuthManager:
                 success=True,
                 token=access_token,
                 user_id=user_id,
-                device_id=device.id,
+                device_id=device_id_to_use,
                 message="认证成功"
             )
             

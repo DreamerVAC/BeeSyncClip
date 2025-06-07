@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import psutil
 from loguru import logger
+import uuid
 
 
 class ConfigManager:
@@ -125,37 +126,36 @@ class CryptoHelper:
             return encrypted_data
 
 
-def get_device_info() -> Dict[str, str]:
+def get_device_info() -> dict:
     """获取设备信息"""
-    try:
-        system_info = {
-            'platform': platform.system(),
-            'platform_release': platform.release(),
-            'platform_version': platform.version(),
-            'architecture': platform.machine(),
-            'hostname': socket.gethostname(),
-            'processor': platform.processor(),
-        }
-        
-        try:
-            system_info['cpu_count'] = str(psutil.cpu_count())
-            memory = psutil.virtual_memory()
-            system_info['memory_total'] = str(memory.total)
-        except:
-            pass
-        
-        device_string = f"{system_info['hostname']}-{system_info['platform']}-{system_info['architecture']}"
-        system_info['device_id'] = hashlib.md5(device_string.encode()).hexdigest()
-        
-        return system_info
     
-    except Exception as e:
-        logger.error(f"获取设备信息失败: {e}")
-        return {
-            'platform': 'Unknown',
-            'hostname': 'Unknown',
-            'device_id': 'unknown-device'
-        }
+    def get_local_ip():
+        """获取本机IP地址"""
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1'
+        finally:
+            if s:
+                s.close()
+        return ip
+
+    return {
+        "device_id": get_mac_address(),
+        "hostname": socket.gethostname(),
+        "platform": platform.system(),
+        "version": platform.release(),
+        "ip_address": get_local_ip()
+    }
+
+
+def get_mac_address():
+    """获取MAC地址作为唯一设备ID"""
+    mac = uuid.getnode()
+    return ''.join(("%012X" % mac)[i:i+2] for i in range(0, 12, 2))
 
 
 def calculate_checksum(data: str) -> str:
@@ -185,18 +185,6 @@ def ensure_directory(path: str) -> bool:
     except Exception as e:
         logger.error(f"创建目录失败 {path}: {e}")
         return False
-
-
-def get_local_ip() -> str:
-    """获取本机IP地址"""
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except:
-        return "127.0.0.1"
 
 
 def truncate_text(text: str, max_length: int = 100) -> str:

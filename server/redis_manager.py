@@ -245,6 +245,10 @@ class RedisManager:
             if not item_data:
                 return None
             
+            # 兼容旧数据: 将 'content_type' 映射到 'type'
+            if 'content_type' in item_data and 'type' not in item_data:
+                item_data['type'] = item_data.pop('content_type')
+
             # 转换时间字段
             if 'created_at' in item_data:
                 item_data['created_at'] = datetime.fromisoformat(item_data['created_at'])

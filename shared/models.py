@@ -40,9 +40,10 @@ class Device(BaseModel):
     """设备模型"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    platform: str  # Windows, macOS, Linux
-    version: str  # 操作系统版本
+    os_info: str  # e.g., "macOS 12.4" or "Windows 11"
+    ip_address: str
     user_id: str
+    created_at: datetime = Field(default_factory=datetime.now)
     last_seen: datetime = Field(default_factory=datetime.now)
     is_online: bool = False
     
