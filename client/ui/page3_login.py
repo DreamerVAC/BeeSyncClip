@@ -254,6 +254,19 @@ class LoginDialog(QtWidgets.QDialog):
         
         return new_device_id
 
+    def reset_state(self):
+        """重置登录对话框状态"""
+        self.ui.lineEdit_username.clear()
+        self.ui.lineEdit_password.clear()
+
+        # 清除错误消息
+        if hasattr(self.ui, 'label_error'):
+            self.ui.label_error.clear()
+
+        # 重置按钮状态
+        if hasattr(self.ui, 'btn_login'):
+            self.ui.btn_login.setEnabled(True)
+
 
 class RegisterDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
