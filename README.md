@@ -1,185 +1,124 @@
 # 🐝 BeeSyncClip - 跨平台剪贴板同步工具
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
-[![PyQt6](https://img.shields.io/badge/PyQt6-GUI-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![PyQt5](https://img.shields.io/badge/PyQt5-GUI-green.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-red.svg)](https://fastapi.tiangolo.com/)
-[![Redis](https://img.shields.io/badge/Redis-Database-orange.svg)](https://redis.io/)
+[![Redis](https://img.shields.io/badge/Redis-Cache-orange.svg)](https://redis.io/)
+[![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 
-> 🚀 **已部署运行** - 服务器地址: http://47.110.154.99:8000  
-> 📱 **测试账号** - 用户名: `testuser` / 密码: `test123`
+> 🚀 **v1.1.2 - 生产就绪**  
+> **实时同步，稳定可靠**
 
-## ✨ 功能特点
+## ✨ 核心功能
 
-- 🔄 **实时同步** - 跨设备剪贴板内容实时同步
-- 🖥️ **原生GUI** - 基于PyQt6的美观桌面客户端
-- 📱 **多设备支持** - 支持Windows、macOS、Linux
-- 🔒 **安全认证** - 用户登录和设备管理
-- 📋 **历史记录** - 完整的剪贴板历史管理
-- ⚡ **高性能** - Redis缓存，FastAPI后端
+- 🔄 **实时同步**: 基于 `WebSocket` 和 `Redis Pub/Sub`，实现毫秒级跨设备剪贴板同步。
+- 🖥️ **原生GUI**: 基于 `PyQt5` 的现代化原生桌面客户端，支持 Windows, macOS, Linux。
+- 📋 **剪贴板管理**: 提供完整的剪贴板历史记录查看、搜索、复制和删除功能。
+- 🔐 **安全认证**: 支持多用户、多设备安全认证和独立管理。
+- ⚡ **高性能后端**: `FastAPI` + `Redis` 提供高性能、高并发的API服务。
+- ☁️ **一键部署**: 提供自动化脚本，简化服务器和客户端的部署流程。
 
-## 🚀 快速开始
+## 🚀 快速入门
 
-### 方法1: 直接使用（推荐）
+### 1. 准备环境
+
+确保您的系统已安装 `Python 3.8+` 和 `pip`。
+
+### 2. 客户端使用 (推荐)
+
+这是最简单的使用方式，直接连接到已部署的公共服务器。
 
 ```bash
-# 1. 克隆项目
+# 克隆项目
 git clone https://github.com/DreamerVAC/BeeSyncClip.git
 cd BeeSyncClip
 
-# 2. 安装依赖
-pip install PyQt6 pyperclip requests
+# 安装GUI依赖 (如果启动失败，请尝试手动安装)
+pip install PyQt5 pyperclip requests websockets
 
-# 3. 启动GUI客户端
+# 启动GUI客户端
+# (Windows用户请直接运行 start_gui.bat, Linux/Mac用户运行 .sh)
 chmod +x start_gui.sh
 ./start_gui.sh
 ```
 
-### 方法2: 完整安装
+**登录信息**:
+- **服务器地址**: `http://47.110.154.99:8000` (客户端默认配置)
+- **测试账号**: `testuser` / `test123`
+
+### 3. 本地部署 (可选)
+
+如果您想在自己的服务器上部署，请按以下步骤操作。
+
+**服务器端**:
 
 ```bash
-# 安装所有依赖
+# (在服务器上) 克隆项目
+git clone https://github.com/DreamerVAC/BeeSyncClip.git
+cd BeeSyncClip
+
+# 安装服务器依赖
 pip install -r requirements.txt
 
-# 启动桌面客户端
-python desktop/main.py
+# 启动后台服务 (推荐)
+chmod +x start_daemon.sh
+./start_daemon.sh
+
+# 查看服务状态
+./status.sh
 ```
 
-## 🔧 网络配置
-
-### 选项A: 直接连接（需配置安全组）
-- 服务器地址: `http://47.110.154.99:8000`
-- 需要配置阿里云安全组开放8000端口
-
-### 选项B: 80端口访问（立即可用）
-- 服务器地址: `http://47.110.154.99`
-- 服务器端执行: `sudo ./start_server_port80.sh`
-
-### 选项C: SSH隧道
-```bash
-ssh -L 8000:localhost:8000 ubuntu@47.110.154.99 -N
-# 然后连接: http://localhost:8000
-```
-
-## 📱 使用说明
-
-### 登录信息
-- **用户名**: `testuser`
-- **密码**: `test123`
-- **服务器**: 自动检测可用地址
-
-### 主要功能
-1. **查看历史** - 显示所有同步的剪贴板内容
-2. **复制内容** - 一键复制历史项目到本地剪贴板
-3. **删除项目** - 管理不需要的剪贴板项目
-4. **自动同步** - 实时监控并同步新内容
-5. **设备管理** - 查看和管理已连接设备
+**客户端**:
+- 启动客户端后，在登录界面将服务器地址修改为您自己的服务器IP和端口。
 
 ## 🏗️ 项目结构
 
 ```
 BeeSyncClip/
-├── 📱 client/          # Web客户端
-├── 🖥️ desktop/         # PyQt6桌面客户端
-├── 🔧 server/          # FastAPI后端服务
-├── 📦 shared/          # 共享模块和数据模型
-├── ⚙️ config/          # 配置文件
-├── 🚀 deploy/          # 部署脚本
-├── 📋 requirements.txt # Python依赖
-├── 🎯 start_gui.sh     # GUI启动脚本
-└── 📖 README.md        # 项目说明
+├── client/                # PyQt5 GUI客户端
+│   ├── main.py            # 客户端入口
+│   ├── ui/                # GUI界面模块
+│   └── api/               # API客户端
+├── server/                # FastAPI后端服务器
+│   ├── main_server.py     # 主服务器 (API + WebSocket)
+│   ├── redis_manager.py   # Redis管理器
+│   └── auth.py            # 认证模块
+├── shared/                # 共享代码和数据模型
+├── config/                # 配置文件
+├── logs/                  # 日志目录
+├── requirements.txt       # Python依赖
+└── *.sh                   # 各种部署和管理脚本
 ```
 
-## 🔌 API接口
+## 🔌 API & WebSocket
 
-### 核心端点
-- `POST /login` - 用户登录
-- `GET /get_clipboards` - 获取剪贴板历史
-- `POST /add_clipboard` - 添加剪贴板内容
-- `POST /delete_clipboard` - 删除剪贴板项目
-- `GET /get_devices` - 获取设备列表
-- `GET /health` - 健康检查
+### API 文档
+- **Swagger UI**: `http://<your-server-ip>:8000/docs`
+- **Redoc**: `http://<your-server-ip>:8000/redoc`
 
-### API文档
-访问 http://47.110.154.99:8000/docs 查看完整API文档
+### WebSocket 端点
+- `ws://<your-server-ip>:8000/ws/{user_id}/{device_id}`
+- 该端点用于客户端和服务器之间的实时通信。
 
-## 🛠️ 开发部署
+## 🔧 开发与调试
 
-### 服务器端部署
+### 启动开发服务器
 ```bash
-# 启动服务器
-./start_daemon.sh
-
-# 检查状态
-./status.sh
-
-# 停止服务器
-./stop_server.sh
+# 确保 Redis 服务正在运行
+# 然后启动FastAPI开发服务器
+python server/main_server.py
 ```
 
-### 本地开发
+### 启动GUI客户端进行调试
 ```bash
-# 安装开发依赖
-pip install -r requirements.txt
-
-# 启动开发服务器
-python start_frontend_server.py
-
-# 启动GUI客户端
-python desktop/main.py
-```
-
-## 📋 系统要求
-
-### 客户端
-- Python 3.8+
-- PyQt6
-- pyperclip
-- requests
-
-### 服务器端
-- Python 3.8+
-- Redis 6.0+
-- FastAPI
-- uvicorn
-
-## 🔧 故障排除
-
-### 无法连接服务器
-```bash
-# 检测端口连通性
-curl http://47.110.154.99:8000/health  # 8000端口
-curl http://47.110.154.99/health        # 80端口
-```
-
-### GUI无法启动
-```bash
-# 安装GUI依赖
-pip install PyQt6 pyperclip
-
-# Linux额外依赖
-sudo apt-get install python3-pyqt6
-```
-
-### 剪贴板不工作
-```bash
-# Linux安装剪贴板支持
-sudo apt-get install xclip  # 或 xsel
+# 在 config/user_settings.yaml 中可修改服务器地址等配置
+python client/main.py
 ```
 
 ## 📄 许可证
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
-## 🤝 贡献
-
-欢迎提交Issue和Pull Request！
-
-## 📞 支持
-
-- 📧 Email: [your-email@example.com]
-- 🐛 Issues: [GitHub Issues](https://github.com/DreamerVAC/BeeSyncClip/issues)
-- 📖 文档: [项目Wiki](https://github.com/DreamerVAC/BeeSyncClip/wiki)
+本项目基于 [MIT License](LICENSE) 授权。
 
 ---
 
-⭐ 如果这个项目对您有帮助，请给个Star支持一下！
+⭐ 如果这个项目对您有帮助，请给一个 **Star** 支持一下！
