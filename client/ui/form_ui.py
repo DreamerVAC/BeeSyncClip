@@ -218,6 +218,44 @@ class MainWindow(QtWidgets.QWidget):
         self.connect_login_signals()
         self.is_logged_in = False
 
+        # 重写导航按钮的点击事件处理
+        self.rebind_navigation_buttons()
+
+    def rebind_navigation_buttons(self):
+        """重新绑定导航按钮的点击事件，添加登录状态检查"""
+        # 断开原有的连接
+        self.ui.btn_clipboard.clicked.disconnect()
+        self.ui.btn_device.clicked.disconnect()
+        self.ui.btn_login.clicked.disconnect()
+
+        # 重新连接，添加登录检查
+        self.ui.btn_clipboard.clicked.connect(self.handle_clipboard_click)
+        self.ui.btn_device.clicked.connect(self.handle_device_click)
+        self.ui.btn_login.clicked.connect(self.ui.show_page_3)  # 登录按钮直接跳转
+
+    def handle_clipboard_click(self):
+        """处理剪切板按钮点击，检查登录状态"""
+        if not self.is_logged_in:
+            self.show_login_warning()
+        else:
+            self.ui.show_page_1()
+
+    def handle_device_click(self):
+        """处理设备按钮点击，检查登录状态"""
+        if not self.is_logged_in:
+            self.show_login_warning()
+        else:
+            self.ui.show_page_2()
+
+    def show_login_warning(self):
+        """显示登录警告"""
+        QtWidgets.QMessageBox.warning(
+            self,
+            "请先登录",
+            "请登录后查看此功能",
+            QtWidgets.QMessageBox.Ok
+        )
+
     def connect_login_signals(self):
         """连接登录成功的信号"""
         self.ui.login_dialog.accepted.connect(self.on_login_success)
