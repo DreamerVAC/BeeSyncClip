@@ -200,12 +200,15 @@ class Ui_DeviceDialog(object):
         self.listWidget.addItem(item)
         self.listWidget.setItemWidget(item, widget)
 
+    def update_status(self, message):
+        """更新状态标签文本"""
+        self.statusLabel.setText(message)
+
     def retranslateUi(self, DeviceDialog):
         _translate = QtCore.QCoreApplication.translate
         DeviceDialog.setWindowTitle(_translate("DeviceDialog", "设备管理"))
-        self.label.setText(_translate("DeviceDialog", "已登录的设备"))
+        self.label.setText(_translate("DeviceDialog", "我的设备"))
         self.syncButton.setText(_translate("DeviceDialog", "刷新列表"))
-        self.statusLabel.setText(_translate("DeviceDialog", "点击刷新按钮加载设备"))
 
 
 class DeviceDialog(QtWidgets.QDialog):
@@ -301,3 +304,8 @@ class DeviceDialog(QtWidgets.QDialog):
 
     def show_message(self, message):
         self.ui.statusLabel.setText(message)
+
+    def stop_refresh(self):
+        """停止设备刷新"""
+        if hasattr(self, 'refresh_timer') and self.refresh_timer.isActive():
+            self.refresh_timer.stop()
