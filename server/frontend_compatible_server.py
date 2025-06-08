@@ -331,10 +331,20 @@ async def login(request: LoginRequest):
             # 转换剪贴板格式
             clipboards_list = []
             for item in clipboard_history.items:
+                # 映射枚举类型到前端期望的content_type格式
+                content_type_map = {
+                    'text': 'text/plain',
+                    'image': 'image/png', 
+                    'file': 'application/octet-stream',
+                    'html': 'text/html',
+                    'rtf': 'text/rtf'
+                }
+                content_type = content_type_map.get(item.type, 'text/plain')
+                
                 clipboards_list.append({
                     "clip_id": item.id,
                     "content": item.content,
-                    "content_type": item.content_type,
+                    "content_type": content_type,
                     "created_at": item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     "last_modified": item.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
                     "device_id": item.device_id
