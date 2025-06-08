@@ -143,7 +143,7 @@ def get_device_info() -> dict:
                 s.close()
         return ip
 
-    return {
+        return {
         "device_id": get_mac_address(),
         "hostname": socket.gethostname(),
         "platform": platform.system(),

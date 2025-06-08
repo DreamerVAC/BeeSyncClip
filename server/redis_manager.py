@@ -247,15 +247,46 @@ class RedisManager:
             
             # 兼容旧数据: 将 'content_type' 映射到 'type'
             if 'content_type' in item_data and 'type' not in item_data:
-                item_data['type'] = item_data.pop('content_type')
+                content_type = item_data.pop('content_type')
+                # 映射 content_type 到 ClipboardType 枚举值
+                if content_type in ['text/plain', 'text']:
+                    item_data['type'] = 'text'
+                elif content_type in ['image/png', 'image/jpeg', 'image']:
+                    item_data['type'] = 'image'
+                elif content_type in ['application/octet-stream', 'file']:
+                    item_data['type'] = 'file'
+                elif content_type in ['text/html', 'html']:
+                    item_data['type'] = 'html'
+                elif content_type in ['text/rtf', 'rtf']:
+                    item_data['type'] = 'rtf'
+                else:
+                    # 默认为text类型
+                    item_data['type'] = 'text'
 
             # 转换时间字段
             if 'created_at' in item_data:
-                item_data['created_at'] = datetime.fromisoformat(item_data['created_at'])
+                if isinstance(item_data['created_at'], str):
+                    item_data['created_at'] = datetime.fromisoformat(item_data['created_at'])
+            
+            if 'updated_at' in item_data:
+                if isinstance(item_data['updated_at'], str):
+                    item_data['updated_at'] = datetime.fromisoformat(item_data['updated_at'])
+            else:
+                # 如果没有updated_at字段，使用created_at的值
+                item_data['updated_at'] = item_data.get('created_at', datetime.now())
             
             # 转换元数据
             if 'metadata' in item_data and isinstance(item_data['metadata'], str):
                 item_data['metadata'] = json.loads(item_data['metadata'])
+            elif 'metadata' not in item_data:
+                item_data['metadata'] = {}
+            
+            # 确保必需字段存在
+            if 'size' not in item_data:
+                item_data['size'] = len(item_data.get('content', ''))
+            
+            if 'checksum' not in item_data:
+                item_data['checksum'] = None
             
             return ClipboardItem(**item_data)
             
@@ -590,6 +621,47 @@ class RedisManager:
         except Exception as e:
             logger.error(f"清空用户剪贴板历史失败: {e}")
             return False
+    
+    def clean_orphaned_clipboard_items(self, user_id: str) -> int:
+        """清理引用不存在设备的剪贴板项"""
+        try:
+            if not self.is_connected():
+                return 0
+            
+            # 获取用户的有效设备列表
+            valid_devices = set()
+            user_devices = self.get_user_devices(user_id)
+            for device in user_devices:
+                if device.get('device_id'):
+                    valid_devices.add(device['device_id'])
+            
+            user_key = f"clipboard:{user_id}"
+            item_ids = self.redis_client.zrange(user_key, 0, -1)
+            
+            cleaned_count = 0
+            for item_id in item_ids:
+                item_key = f"item:{item_id}"
+                item_data = self.redis_client.hgetall(item_key)
+                
+                if item_data:
+                    device_id = item_data.get('device_id')
+                    # 如果设备ID不存在或不在有效设备列表中，删除此剪贴板项
+                    if not device_id or device_id not in valid_devices:
+                        # 从用户集合中删除
+                        self.redis_client.zrem(user_key, item_id)
+                        # 删除项目数据
+                        self.redis_client.delete(item_key)
+                        cleaned_count += 1
+                        logger.debug(f"清理无效剪贴板项: {item_id}, device_id={device_id}")
+            
+            if cleaned_count > 0:
+                logger.info(f"清理完成: user_id={user_id}, cleaned_items={cleaned_count}")
+            
+            return cleaned_count
+            
+        except Exception as e:
+            logger.error(f"清理无效剪贴板项失败: {e}")
+            return 0
 
 
 # 全局 Redis 管理器实例

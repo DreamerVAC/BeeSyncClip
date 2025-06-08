@@ -26,6 +26,7 @@ class ClipboardItem(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)  # 元数据
     size: int = 0  # 数据大小（字节）
     created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
     device_id: str
     user_id: str
     checksum: Optional[str] = None  # 数据校验和

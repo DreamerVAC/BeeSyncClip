@@ -666,6 +666,11 @@ async def get_clipboards(username: str):
         if not user:
             return error_response("用户未找到", 404)
         
+        # 清理引用不存在设备的剪贴板项
+        cleaned_count = redis_manager.clean_orphaned_clipboard_items(user['id'])
+        if cleaned_count > 0:
+            logger.info(f"清理了 {cleaned_count} 个无效剪贴板项")
+        
         # 获取用户设备列表，并创建一个 device_id 到 device_label 的映射
         user_devices = redis_manager.get_user_devices(user['id'])
         device_map = {d['device_id']: d['name'] for d in user_devices}
