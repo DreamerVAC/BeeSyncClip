@@ -135,6 +135,13 @@ class AuthManager:
             device_info = auth_request.device_info
             logger.info(f"接收到的设备信息: {device_info}")
             device_id = device_info.get('device_id')
+            
+            # 获取设备名称，优先使用hostname，然后是device_name，最后使用label
+            device_name = (device_info.get('hostname') or 
+                          device_info.get('device_name') or 
+                          device_info.get('label') or 
+                          f"设备-{device_id[:8]}" if device_id else 'Unknown Device')
+            logger.debug(f"设备名称: {device_name}")
 
             # 检查设备是否已存在
             device_key = f"device:{device_id}"
@@ -147,19 +154,23 @@ class AuthManager:
                 device_data['is_online'] = 'True'
                 device_data['ip_address'] = device_info.get('ip_address', device_data.get('ip_address', '0.0.0.0'))
                 device_data['os_info'] = f"{device_info.get('platform', 'Unknown')} {device_info.get('version', '')}".strip()
+                # 也要更新设备名称，防止之前保存的名称不正确
+                device_data['name'] = device_name
                 redis_manager.redis_client.hset(device_key, mapping=device_data)
                 device_id_to_use = device_id
+                logger.debug(f"更新现有设备: {device_id} -> {device_name}")
             else:
                 # 创建新设备
                 os_info = f"{device_info.get('platform', 'Unknown')} {device_info.get('version', '')}".strip()
                 device = Device(
                     id=device_id, # 使用客户端传来的ID
-                    name=device_info.get('hostname') or device_info.get('device_name', 'Unknown Device'),
+                    name=device_name,
                     os_info=os_info,
                     ip_address=device_info.get('ip_address', '0.0.0.0'),
                     user_id=user_id,
                     is_online=True
                 )
+                logger.debug(f"创建新设备: {device_id} -> {device_name}")
                 
                 # 保存设备信息
                 device_data = device.dict()
