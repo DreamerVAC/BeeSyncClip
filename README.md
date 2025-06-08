@@ -78,8 +78,8 @@ chmod +x start_daemon.sh
 ```
 BeeSyncClip/
 ├── client/                   # PyQt5 GUI客户端
-│   ├── main.py               # 客户端入口
 │   ├── ui/                   # GUI界面模块
+│   │   └── form_ui.py        # 客户端入口
 │   └── api/                  # API客户端
 ├── server/                   # FastAPI后端服务器
 │   ├── main_server.py        # 主服务器 (API + WebSocket)
@@ -123,11 +123,8 @@ python server/main_server.py
 
 ### 启动GUI客户端进行调试
 ```bash
-# 直接启动客户端UI
+# 启动客户端GUI
 python client/ui/form_ui.py
-
-# 或通过主入口启动（包含服务器连接检查）
-python client/main.py
 ```
 
 ## 📄 许可证
