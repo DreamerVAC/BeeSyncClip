@@ -172,5 +172,7 @@ device_id.conf
 *.conf
 *.pid
 *.log
+client.log
+client.pid
 /logs/*
 !/logs/.gitkeep 

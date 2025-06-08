@@ -41,7 +41,8 @@ python client/ui/form_ui.py
 
 # 或使用便捷脚本（自动检查和安装依赖）
 chmod +x start_client.sh
-./start_client.sh
+./start_client.sh                    # 前台启动
+./start_client.sh --daemon           # 后台启动，不占用终端
 ```
 
 **登录信息**:
@@ -152,6 +153,13 @@ python server/main_server.py
 ```bash
 # 启动客户端GUI
 python client/ui/form_ui.py
+
+# 或使用脚本
+./start_client.sh              # 前台启动
+./start_client.sh --daemon     # 后台启动
+
+# 停止后台客户端
+./stop_client.sh
 ```
 
 ## 📄 许可证
