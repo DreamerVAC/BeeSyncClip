@@ -6,17 +6,15 @@
 [![Redis](https://img.shields.io/badge/Redis-Cache-orange.svg)](https://redis.io/)
 [![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 
-> 🚀 **v1.1.2 - 生产就绪**  
-> **实时同步，稳定可靠**
 
 ## ✨ 核心功能
 
-- 🔄 **实时同步**: 基于 `WebSocket` 和 `Redis Pub/Sub`，实现毫秒级跨设备剪贴板同步。
-- 🖥️ **原生GUI**: 基于 `PyQt5` 的现代化原生桌面客户端，支持 Windows, macOS, Linux。
-- 📋 **剪贴板管理**: 提供完整的剪贴板历史记录查看、搜索、复制和删除功能。
-- 🔐 **安全认证**: 支持多用户、多设备安全认证和独立管理。
-- ⚡ **高性能后端**: `FastAPI` + `Redis` 提供高性能、高并发的API服务。
-- ☁️ **一键部署**: 提供自动化脚本，简化服务器和客户端的部署流程。
+- 🔄 **跨设备同步**: 使用 WebSocket 和 Redis Pub/Sub 实现跨设备剪贴板同步
+- 🖥️ **桌面客户端**: 基于 PyQt5 的跨平台桌面应用，支持 Windows、macOS、Linux
+- 📋 **剪贴板管理**: 提供剪贴板历史记录的查看、搜索和管理功能
+- 🔐 **用户认证**: 支持用户注册、登录和多设备管理
+- ⚡ **后端服务**: 基于 FastAPI 和 Redis 构建的 RESTful API 服务
+- 📦 **简化部署**: 提供自动化脚本简化服务器和客户端的启动流程
 
 ## 🚀 快速入门
 
@@ -130,15 +128,42 @@ BeeSyncClip/
 - **`requirements-server.txt`**: 服务器后端的必需依赖  
 - **`requirements.txt`**: 完整的项目依赖列表
 
-## 🔌 API & WebSocket
+## 🔌 API 文档
 
-### API 文档
-- **Swagger UI**: `http://<your-server-ip>:8000/docs`
-- **Redoc**: `http://<your-server-ip>:8000/redoc`
+### 在线文档
+项目使用 FastAPI 自动生成 API 文档：
+- **Swagger UI**: `http://<server-address>:8000/docs`
+- **ReDoc**: `http://<server-address>:8000/redoc`
 
-### WebSocket 端点
-- `ws://<your-server-ip>:8000/ws/{user_id}/{device_id}`
-- 该端点用于客户端和服务器之间的实时通信。
+### 主要 API 端点
+
+#### 认证相关
+- `POST /register` - 用户注册
+- `POST /login` - 用户登录
+
+#### 剪贴板管理 (兼容前端)
+- `GET /get_clipboards?username={username}` - 获取用户剪贴板记录
+- `POST /add_clipboard` - 添加剪贴板记录
+- `POST /delete_clipboard` - 删除指定剪贴板记录
+- `POST /clear_clipboards` - 清空用户所有剪贴板记录
+
+#### RESTful API (认证版本)
+- `GET /clipboard/history` - 获取剪贴板历史记录 (需要认证)
+- `GET /clipboard/latest` - 获取最新剪贴板项 (需要认证)
+- `DELETE /clipboard/{item_id}` - 删除剪贴板项 (需要认证)
+- `GET /stats` - 获取用户统计信息 (需要认证)
+
+#### 系统信息
+- `GET /` - API 状态和信息
+- `GET /health` - 服务健康检查
+
+### WebSocket 连接
+- **端点**: `ws://<server-address>:8000/ws/{user_id}/{device_id}`
+- **用途**: 实时剪贴板同步和设备状态通信
+- **支持消息类型**: 
+  - `ping/pong` - 心跳检测
+  - `clipboard_sync` - 剪贴板同步
+  - `request_history` - 请求历史记录
 
 ## 🔧 开发与调试
 
