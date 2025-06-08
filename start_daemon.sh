@@ -7,6 +7,13 @@ PID_FILE="beesyncclip.pid"
 
 echo "🚀 启动 BeeSyncClip 服务器 (后台模式)..."
 
+# 检查Python依赖
+echo "🔍 检查服务器依赖..."
+if [ -f "requirements-server.txt" ]; then
+    echo "📦 确保服务器依赖已安装..."
+    pip install -r requirements-server.txt --quiet
+fi
+
 # 检查Redis是否运行
 if ! redis-cli ping > /dev/null 2>&1; then
     echo "❌ Redis 未运行，请先启动 Redis 服务"

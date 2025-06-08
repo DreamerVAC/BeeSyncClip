@@ -168,6 +168,9 @@ upload_to_server.sh
 .DS_Store
 
 # BeeSyncClip specific
-/client/ui/device_id.conf
+device_id.conf
+*.conf
+*.pid
+*.log
 /logs/*
 !/logs/.gitkeep 

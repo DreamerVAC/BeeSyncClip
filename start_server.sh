@@ -5,6 +5,19 @@
 echo "🚀 BeeSyncClip 后端服务器"
 echo "========================="
 
+# 检查Python依赖
+echo "🔍 检查服务器依赖..."
+if [ -f "requirements-server.txt" ]; then
+    echo "📦 安装服务器依赖..."
+    pip install -r requirements-server.txt
+    if [ $? -ne 0 ]; then
+        echo "❌ 服务器依赖安装失败！"
+        exit 1
+    fi
+else
+    echo "⚠️ 未找到requirements-server.txt，请确保已安装所需依赖"
+fi
+
 # 检查Redis服务
 echo "🔍 检查Redis服务..."
 if ! systemctl is-active --quiet redis; then

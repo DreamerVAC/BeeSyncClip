@@ -33,13 +33,15 @@
 git clone https://github.com/DreamerVAC/BeeSyncClip.git
 cd BeeSyncClip
 
-# 安装GUI依赖 (如果启动失败，请尝试手动安装)
-pip install PyQt5 pyperclip requests websockets
+# 安装客户端依赖
+pip install -r requirements-client.txt
 
 # 启动GUI客户端
-# (Windows用户请直接运行 start_gui.bat, Linux/Mac用户运行 .sh)
-chmod +x start_gui.sh
-./start_gui.sh
+python client/ui/form_ui.py
+
+# 或使用便捷脚本（自动检查和安装依赖）
+chmod +x start_client.sh
+./start_client.sh
 ```
 
 **登录信息**:
@@ -58,7 +60,7 @@ git clone https://github.com/DreamerVAC/BeeSyncClip.git
 cd BeeSyncClip
 
 # 安装服务器依赖
-pip install -r requirements.txt
+pip install -r requirements-server.txt
 
 # 启动后台服务 (推荐)
 chmod +x start_daemon.sh
@@ -75,20 +77,30 @@ chmod +x start_daemon.sh
 
 ```
 BeeSyncClip/
-├── client/                # PyQt5 GUI客户端
-│   ├── main.py            # 客户端入口
-│   ├── ui/                # GUI界面模块
-│   └── api/               # API客户端
-├── server/                # FastAPI后端服务器
-│   ├── main_server.py     # 主服务器 (API + WebSocket)
-│   ├── redis_manager.py   # Redis管理器
-│   └── auth.py            # 认证模块
-├── shared/                # 共享代码和数据模型
-├── config/                # 配置文件
-├── logs/                  # 日志目录
-├── requirements.txt       # Python依赖
-└── *.sh                   # 各种部署和管理脚本
+├── client/                   # PyQt5 GUI客户端
+│   ├── main.py               # 客户端入口
+│   ├── ui/                   # GUI界面模块
+│   └── api/                  # API客户端
+├── server/                   # FastAPI后端服务器
+│   ├── main_server.py        # 主服务器 (API + WebSocket)
+│   ├── redis_manager.py      # Redis管理器
+│   └── auth.py               # 认证模块
+├── shared/                   # 共享代码和数据模型
+├── config/                   # 配置文件
+├── logs/                     # 日志目录
+├── requirements.txt          # 完整依赖列表
+├── requirements-client.txt   # 客户端专用依赖
+├── requirements-server.txt   # 服务器专用依赖
+└── *.sh                      # 各种部署和管理脚本
 ```
+
+## 📦 依赖说明
+
+项目提供了多个requirements文件以满足不同的使用场景：
+
+- **`requirements-client.txt`**: 客户端GUI应用的最小依赖集
+- **`requirements-server.txt`**: 服务器后端的必需依赖  
+- **`requirements.txt`**: 完整的项目依赖列表
 
 ## 🔌 API & WebSocket
 
@@ -111,7 +123,10 @@ python server/main_server.py
 
 ### 启动GUI客户端进行调试
 ```bash
-# 在 config/user_settings.yaml 中可修改服务器地址等配置
+# 直接启动客户端UI
+python client/ui/form_ui.py
+
+# 或通过主入口启动（包含服务器连接检查）
 python client/main.py
 ```
 

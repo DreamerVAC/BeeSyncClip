@@ -1,0 +1,15 @@
+# BeeSyncClip 客户端依赖
+# GUI 应用最小依赖集
+
+# GUI 框架
+PyQt5==5.15.9
+
+# 剪贴板操作
+pyperclip==1.9.0
+
+# HTTP 客户端
+requests==2.32.3
+
+# 配置和日志 (共享)
+PyYAML==6.0.2
+loguru==0.7.3 
