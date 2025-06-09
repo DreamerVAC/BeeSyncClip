@@ -273,6 +273,68 @@ class AuthManager:
             logger.error(f"获取用户信息失败: {e}")
             return None
     
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """通过用户名获取用户信息（兼容方法）"""
+        user_info = self.get_user_info(username)
+        if not user_info:
+            return None
+        
+        # 添加password字段用于兼容
+        try:
+            user_data = redis_manager.redis_client.hgetall(f"user:{user_info['id']}")
+            return {
+                "id": user_info["id"],
+                "username": user_info["username"],
+                "password": user_data.get('password_hash', ''),
+                "email": user_info["email"],
+                "created_at": user_info["created_at"],
+                "is_active": user_info["is_active"]
+            }
+        except Exception as e:
+            logger.error(f"获取用户详细信息失败: {e}")
+            return None
+    
+    def create_or_update_device(self, user_id: str, device_info: Dict[str, Any]) -> Dict[str, Any]:
+        """创建或更新设备信息"""
+        try:
+            device_id = device_info.get('device_id')
+            if not device_id:
+                # 生成设备ID
+                import uuid
+                device_id = str(uuid.uuid4())
+            
+            device_name = (device_info.get('hostname') or 
+                          device_info.get('device_name') or 
+                          device_info.get('label') or 
+                          f"设备-{device_id[:8]}")
+            
+            device_key = f"device:{device_id}"
+            device_data = {
+                'id': device_id,
+                'name': device_name,
+                'user_id': user_id,
+                'os_info': f"{device_info.get('platform', 'Unknown')} {device_info.get('version', '')}".strip(),
+                'ip_address': device_info.get('ip_address', '0.0.0.0'),
+                'is_online': 'True',
+                'created_at': datetime.now().isoformat(),
+                'last_seen': datetime.now().isoformat()
+            }
+            
+            # 保存设备信息
+            redis_manager.redis_client.hset(device_key, mapping=device_data)
+            
+            # 添加到用户设备列表
+            redis_manager.redis_client.sadd(f"devices:{user_id}", device_id)
+            
+            # 设置在线状态
+            redis_manager.set_device_online(user_id, device_id)
+            
+            return {"id": device_id, "name": device_name}
+            
+        except Exception as e:
+            logger.error(f"创建或更新设备失败: {e}")
+            return {"id": device_id, "name": "Unknown Device"}
+    
     def logout_user(self, token: str) -> bool:
         """用户登出"""
         try:

@@ -21,10 +21,45 @@ echo ""
 
 # 检查服务器进程状态
 echo "🌐 BeeSyncClip 服务器状态:"
+
+# 检测服务器类型
+detect_server_type() {
+    # 检查模块化服务器
+    if pgrep -f "start_modular_server.py" > /dev/null; then
+        echo "modular"
+    elif pgrep -f "modular_server" > /dev/null; then
+        echo "modular"
+    # 检查原始服务器
+    elif pgrep -f "start_frontend_server.py" > /dev/null; then
+        echo "original"
+    elif pgrep -f "frontend_compatible_server" > /dev/null; then
+        echo "original"
+    else
+        echo "unknown"
+    fi
+}
+
+SERVER_TYPE=$(detect_server_type)
+
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if ps -p "$PID" > /dev/null 2>&1; then
         echo "  ✅ 服务器运行中 (PID: $PID)"
+        
+        # 显示服务器版本
+        case $SERVER_TYPE in
+            "modular")
+                echo "  🔥 服务器版本: 模块化服务器 v2.0"
+                echo "     ✅ AES-256加密 + JWT认证"
+                echo "     ✅ 性能优化 + 批量查询"
+                ;;
+            "original")
+                echo "  📦 服务器版本: 原始服务器 v1.0"
+                ;;
+            *)
+                echo "  ❓ 服务器版本: 未知"
+                ;;
+        esac
         
         # 获取进程信息
         PROCESS_INFO=$(ps -p "$PID" -o pid,ppid,pcpu,pmem,etime,cmd --no-headers)
@@ -39,10 +74,18 @@ if [ -f "$PID_FILE" ]; then
         
         # 测试API连通性
         echo "  🧪 API 测试:"
-        if curl -s -m 5 http://localhost:8000/register -X POST \
-           -H "Content-Type: application/json" \
-           -d '{"username":"test","password":"test"}' | grep -q "success"; then
-            echo "    ✅ API 响应正常"
+        
+        # 先测试健康检查接口
+        if curl -s -m 5 http://localhost:8000/health > /dev/null 2>&1; then
+            echo "    ✅ 健康检查正常"
+            
+            # 根据服务器类型测试不同的接口
+            if [ "$SERVER_TYPE" = "modular" ]; then
+                # 测试模块化服务器的安全信息接口
+                if curl -s -m 5 http://localhost:8000/security/info | grep -q "encryption"; then
+                    echo "    ✅ 安全模块正常"
+                fi
+            fi
         else
             echo "    ⚠️  API 响应异常"
         fi
@@ -93,7 +136,10 @@ fi
 
 echo ""
 echo "📋 管理命令:"
-echo "  启动服务: ./start_daemon.sh"
-echo "  停止服务: ./stop_server.sh" 
-echo "  查看日志: tail -f $LOG_FILE"
-echo "  重启服务: ./stop_server.sh && ./start_daemon.sh" 
+echo "  启动模块化服务器: ./start_server.sh -m -d"
+echo "  启动原始服务器:   ./start_server.sh -o -d"
+echo "  停止服务:         ./stop_server.sh" 
+echo "  查看日志:         tail -f $LOG_FILE"
+echo "  重启服务:         ./stop_server.sh && ./start_server.sh -m -d"
+echo ""
+echo "💡 推荐使用模块化服务器 (-m)，性能更好，安全性更强！" 

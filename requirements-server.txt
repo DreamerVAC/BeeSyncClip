@@ -31,4 +31,17 @@ PyYAML==6.0.2
 loguru==0.7.3
 
 # 文件上传支持
-python-multipart==0.0.20 
+python-multipart==0.0.20
+
+# 模块化服务器额外依赖
+# 速率限制
+slowapi==0.1.9
+
+# 安全中间件
+starlette==0.41.3
+
+# 时间处理
+python-dateutil==2.9.0
+
+# JSON Web Token 扩展
+python-jose[cryptography]==3.3.0 

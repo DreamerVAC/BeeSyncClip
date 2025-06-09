@@ -48,4 +48,41 @@ else
 fi
 
 # 停止所有相关进程
-pkill -f "start_frontend_server.py" && echo "✅ 已停止所有相关进程" || echo "ℹ️  未发现运行中的进程" 
+echo "🔍 查找并停止所有BeeSyncClip服务器进程..."
+
+STOPPED_COUNT=0
+
+# 停止模块化服务器
+if pkill -f "start_modular_server.py" 2>/dev/null; then
+    echo "✅ 已停止模块化服务器进程"
+    STOPPED_COUNT=$((STOPPED_COUNT + 1))
+fi
+
+# 停止原始服务器
+if pkill -f "start_frontend_server.py" 2>/dev/null; then
+    echo "✅ 已停止原始服务器进程"
+    STOPPED_COUNT=$((STOPPED_COUNT + 1))
+fi
+
+# 停止动态启动脚本
+if pkill -f "start_beesyncclip_" 2>/dev/null; then
+    echo "✅ 已停止动态启动脚本"
+    STOPPED_COUNT=$((STOPPED_COUNT + 1))
+fi
+
+# 停止uvicorn进程（如果有的话）
+if pkill -f "uvicorn.*modular_server" 2>/dev/null; then
+    echo "✅ 已停止uvicorn模块化服务器"
+    STOPPED_COUNT=$((STOPPED_COUNT + 1))
+fi
+
+if pkill -f "uvicorn.*frontend_compatible_server" 2>/dev/null; then
+    echo "✅ 已停止uvicorn原始服务器"
+    STOPPED_COUNT=$((STOPPED_COUNT + 1))
+fi
+
+if [ $STOPPED_COUNT -eq 0 ]; then
+    echo "ℹ️  未发现运行中的BeeSyncClip服务器进程"
+else
+    echo "✅ 总共停止了 $STOPPED_COUNT 个进程"
+fi 

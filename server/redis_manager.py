@@ -196,6 +196,33 @@ class RedisManager:
             # 保存具体的剪切板项数据
             item_data = item.dict()
             item_data['created_at'] = item.created_at.isoformat()
+            item_data['updated_at'] = item.updated_at.isoformat()
+            
+            # 序列化metadata为JSON字符串
+            if 'metadata' in item_data and isinstance(item_data['metadata'], dict):
+                item_data['metadata'] = json.dumps(item_data['metadata'])
+            
+            # 兼容原始API：添加content_type字段
+            metadata = item.metadata if isinstance(item.metadata, dict) else {}
+            if 'original_content_type' in metadata:
+                item_data['content_type'] = metadata['original_content_type']
+            else:
+                # 如果没有原始类型，根据type转换
+                type_to_content_type = {
+                    'text': 'text/plain',
+                    'image': 'image/png',
+                    'file': 'application/octet-stream',
+                    'html': 'text/html',
+                    'rtf': 'text/rtf'
+                }
+                item_data['content_type'] = type_to_content_type.get(item.type.value, 'text/plain')
+            
+            # 确保所有值都是Redis可接受的类型
+            for key, value in item_data.items():
+                if isinstance(value, (dict, list)):
+                    item_data[key] = json.dumps(value)
+                elif value is None:
+                    item_data[key] = ""
             
             self.redis_client.hset(item_key, mapping=item_data)
             
@@ -296,7 +323,7 @@ class RedisManager:
     
     def get_user_clipboard_history(self, user_id: str, page: int = 1, 
                                  per_page: int = 50) -> ClipboardHistory:
-        """获取用户的剪切板历史"""
+        """获取用户的剪切板历史（优化版本，避免N+1查询）"""
         try:
             if not self.is_connected():
                 return ClipboardHistory(items=[], total=0, page=page, per_page=per_page)
@@ -313,12 +340,11 @@ class RedisManager:
             # 获取指定范围的项目ID（按时间倒序）
             item_ids = self.redis_client.zrevrange(user_key, start, end)
             
-            # 获取具体的剪切板项
-            items = []
-            for item_id in item_ids:
-                item = self.get_clipboard_item(item_id)
-                if item:
-                    items.append(item)
+            if not item_ids:
+                return ClipboardHistory(items=[], total=total, page=page, per_page=per_page)
+            
+            # 🚀 批量获取剪切板项，避免N+1查询问题
+            items = self._batch_get_clipboard_items(item_ids)
             
             return ClipboardHistory(
                 items=items,
@@ -330,6 +356,87 @@ class RedisManager:
         except Exception as e:
             logger.error(f"获取用户剪切板历史失败: {e}")
             return ClipboardHistory(items=[], total=0, page=page, per_page=per_page)
+    
+    def _batch_get_clipboard_items(self, item_ids: List[str]) -> List[ClipboardItem]:
+        """批量获取剪切板项，优化性能"""
+        try:
+            if not item_ids:
+                return []
+            
+            # 使用pipeline批量获取，减少Redis往返次数
+            pipe = self.redis_client.pipeline()
+            
+            for item_id in item_ids:
+                item_key = f"item:{item_id}"
+                pipe.hgetall(item_key)
+            
+            results = pipe.execute()
+            
+            items = []
+            for i, item_data in enumerate(results):
+                if not item_data:
+                    continue
+                
+                try:
+                    # 兼容处理
+                    if 'content_type' in item_data and 'type' not in item_data:
+                        content_type = item_data.pop('content_type')
+                        # 映射到枚举值
+                        if content_type in ['text/plain', 'text']:
+                            item_data['type'] = 'text'
+                        elif content_type in ['image/png', 'image/jpeg', 'image']:
+                            item_data['type'] = 'image'
+                        elif content_type in ['application/octet-stream', 'file']:
+                            item_data['type'] = 'file'
+                        elif content_type in ['text/html', 'html']:
+                            item_data['type'] = 'html'
+                        elif content_type in ['text/rtf', 'rtf']:
+                            item_data['type'] = 'rtf'
+                        else:
+                            item_data['type'] = 'text'
+                        
+                        # 保存原始content_type到metadata
+                        if 'metadata' not in item_data:
+                            item_data['metadata'] = {}
+                        elif isinstance(item_data['metadata'], str):
+                            item_data['metadata'] = json.loads(item_data['metadata'])
+                        
+                        if isinstance(item_data['metadata'], dict):
+                            item_data['metadata']['original_content_type'] = content_type
+                    
+                    # 处理时间字段
+                    if 'created_at' in item_data and isinstance(item_data['created_at'], str):
+                        item_data['created_at'] = datetime.fromisoformat(item_data['created_at'])
+                    
+                    if 'updated_at' in item_data and isinstance(item_data['updated_at'], str):
+                        item_data['updated_at'] = datetime.fromisoformat(item_data['updated_at'])
+                    elif 'updated_at' not in item_data:
+                        item_data['updated_at'] = item_data.get('created_at', datetime.now())
+                    
+                    # 处理metadata
+                    if 'metadata' in item_data and isinstance(item_data['metadata'], str):
+                        item_data['metadata'] = json.loads(item_data['metadata'])
+                    elif 'metadata' not in item_data:
+                        item_data['metadata'] = {}
+                    
+                    # 确保必需字段
+                    if 'size' not in item_data:
+                        item_data['size'] = len(item_data.get('content', ''))
+                    if 'checksum' not in item_data:
+                        item_data['checksum'] = None
+                    
+                    item = ClipboardItem(**item_data)
+                    items.append(item)
+                    
+                except Exception as e:
+                    logger.error(f"解析剪切板项失败 {item_ids[i]}: {e}")
+                    continue
+            
+            return items
+            
+        except Exception as e:
+            logger.error(f"批量获取剪切板项失败: {e}")
+            return []
     
     def delete_clipboard_item(self, item_id: str) -> bool:
         """删除指定的剪切板项（重载版本，不需要user_id）"""
@@ -662,6 +769,51 @@ class RedisManager:
         except Exception as e:
             logger.error(f"清理无效剪贴板项失败: {e}")
             return 0
+    
+    def get_user_clipboard_stats(self, user_id: str) -> Dict[str, Any]:
+        """获取用户剪切板统计信息"""
+        try:
+            if not self.is_connected():
+                return {"total": 0, "today": 0, "this_week": 0}
+            
+            user_key = f"clipboard:{user_id}"
+            total = self.redis_client.zcard(user_key)
+            
+            # 简化统计，只返回总数
+            return {
+                "total": total,
+                "today": 0,  # 可以后续实现
+                "this_week": 0  # 可以后续实现
+            }
+            
+        except Exception as e:
+            logger.error(f"获取用户剪切板统计失败: {e}")
+            return {"total": 0, "today": 0, "this_week": 0}
+    
+    def close(self):
+        """关闭Redis连接"""
+        try:
+            # 取消所有订阅
+            if self.pubsub:
+                self.pubsub.close()
+                self.pubsub = None
+            
+            # 关闭Redis客户端连接
+            if self.redis_client:
+                self.redis_client.close()
+                self.redis_client = None
+            
+            if self.pubsub_client:
+                self.pubsub_client.close()
+                self.pubsub_client = None
+            
+            # 清空订阅者
+            self.subscribers.clear()
+            
+            logger.info("Redis连接已关闭")
+            
+        except Exception as e:
+            logger.error(f"关闭Redis连接失败: {e}")
 
 
 # 全局 Redis 管理器实例

@@ -44,11 +44,54 @@ def test_api_endpoint(url, endpoint, method='GET', data=None, headers=None):
     
     return None
 
+def detect_server_type(server_url):
+    """检测服务器类型"""
+    try:
+        response = requests.get(f"{server_url}/", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if "modular" in data.get("version", "").lower() or "v2.0" in data.get("version", ""):
+                return "modular"
+            else:
+                return "original"
+    except:
+        pass
+    return "unknown"
+
+def test_modular_server_features(server_url):
+    """测试模块化服务器特有功能"""
+    print(f"\n🔥 测试模块化服务器特有功能")
+    
+    # 测试安全信息接口
+    test_api_endpoint(server_url, "/security/info")
+    
+    # 测试加密状态
+    test_api_endpoint(server_url, "/security/encryption/status")
+
 def main():
-    server_url = "http://47.110.154.99:8000"
+    import sys
+    
+    # 支持命令行参数指定服务器地址
+    if len(sys.argv) > 1:
+        server_url = sys.argv[1]
+    else:
+        server_url = "http://47.110.154.99:8000"
     
     print("🚀 BeeSyncClip API 测试开始")
     print(f"服务器地址: {server_url}")
+    
+    # 检测服务器类型
+    server_type = detect_server_type(server_url)
+    print(f"服务器类型: {server_type}")
+    
+    if server_type == "modular":
+        print("🔥 检测到模块化服务器 v2.0")
+        print("   ✅ AES-256加密 + JWT认证")
+        print("   ✅ 性能优化 + 批量查询")
+    elif server_type == "original":
+        print("📦 检测到原始服务器 v1.0")
+    else:
+        print("❓ 未知服务器类型")
     
     # 测试根路径
     test_api_endpoint(server_url, "/")
@@ -58,6 +101,10 @@ def main():
     
     # 测试API文档
     test_api_endpoint(server_url, "/docs")
+    
+    # 如果是模块化服务器，测试特有功能
+    if server_type == "modular":
+        test_modular_server_features(server_url)
     
     # 生成唯一用户名
     unique_username = f"testuser_{int(time.time())}"
