@@ -559,8 +559,8 @@ class RedisManager:
                 return None
             
             # 首先通过用户名索引获取用户ID
-            user_key = f"user:username:{username}"
-            user_id = self.redis_client.get(user_key)
+            username_key = f"username:{username}"
+            user_id = self.redis_client.get(username_key)
             
             if not user_id:
                 return None
@@ -853,6 +853,124 @@ class RedisManager:
             
         except Exception as e:
             logger.error(f"关闭Redis连接失败: {e}")
+
+
+    def get_all_users(self) -> List[dict]:
+        """获取所有用户列表（管理员功能）"""
+        try:
+            if not self.is_connected():
+                return []
+            
+            users = []
+            # 查找所有用户ID格式的key（user:uuid）
+            all_user_keys = self.redis_client.keys("user:*")
+            
+            user_keys = []
+            for key in all_user_keys:
+                # 只保留user:uuid格式的key，排除user:username:xxx格式
+                key_str = key.decode('utf-8') if isinstance(key, bytes) else key
+                if key_str.startswith('user:') and not key_str.startswith('user:username:'):
+                    key_type = self.redis_client.type(key)
+                    if key_type in [b'hash', 'hash']:  # 确保是hash类型（兼容bytes和str）
+                        user_keys.append(key)
+            
+            for user_key in user_keys:
+                user_data = self.redis_client.hgetall(user_key)
+                if user_data:
+                    # 将bytes转换为字符串
+                    user_info = {}
+                    for key, value in user_data.items():
+                        if isinstance(key, bytes):
+                            key = key.decode('utf-8')
+                        if isinstance(value, bytes):
+                            value = value.decode('utf-8')
+                        user_info[key] = value
+                    
+                    # 转换时间字段
+                    if user_info.get('created_at'):
+                        try:
+                            from datetime import datetime
+                            user_info['created_at'] = datetime.fromisoformat(user_info['created_at'])
+                        except:
+                            pass
+                    
+                    users.append(user_info)
+            
+            logger.debug(f"获取所有用户成功，共 {len(users)} 个用户")
+            return users
+            
+        except Exception as e:
+            logger.error(f"获取所有用户失败: {e}")
+            return []
+    
+    def delete_user(self, user_id: str) -> bool:
+        """删除用户账户（管理员功能）"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            user_key = f"user:{user_id}"
+            
+            # 检查用户是否存在
+            if not self.redis_client.exists(user_key):
+                logger.warning(f"用户不存在: {user_id}")
+                return False
+            
+            # 获取用户信息
+            user_data = self.redis_client.hgetall(user_key)
+            username = user_data.get('username') or user_data.get(b'username', b'').decode('utf-8')
+            
+            # 删除用户名到ID的映射
+            if username:
+                username_key = f"username:{username}"
+                self.redis_client.delete(username_key)
+            
+            # 删除用户设备集合
+            devices_key = f"devices:{user_id}"
+            self.redis_client.delete(devices_key)
+            
+            # 删除在线设备集合
+            online_devices_key = f"online_devices:{user_id}"
+            self.redis_client.delete(online_devices_key)
+            
+            # 删除用户剪贴板集合
+            clipboard_key = f"clipboard:{user_id}"
+            self.redis_client.delete(clipboard_key)
+            
+            # 删除用户信息
+            self.redis_client.delete(user_key)
+            
+            logger.info(f"删除用户成功: {user_id} ({username})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"删除用户失败: {e}")
+            return False
+    
+    def remove_user_device(self, user_id: str, device_id: str) -> bool:
+        """从用户账户中移除设备"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            # 从用户设备集合中删除
+            devices_key = f"devices:{user_id}"
+            self.redis_client.srem(devices_key, device_id)
+            
+            # 从在线设备集合中删除
+            online_devices_key = f"online_devices:{user_id}"
+            self.redis_client.srem(online_devices_key, device_id)
+            
+            # 删除设备信息
+            device_key = f"device:{device_id}"
+            self.redis_client.delete(device_key)
+            
+            logger.debug(f"从用户 {user_id} 中移除设备: {device_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"移除用户设备失败: {e}")
+            return False
 
 
 # 全局 Redis 管理器实例

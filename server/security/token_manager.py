@@ -25,6 +25,7 @@ class TokenManager:
         self.algorithm = 'HS256'
         self.access_token_expire_hours = 24  # 访问token过期时间（小时）
         self.refresh_token_expire_days = 30   # 刷新token过期时间（天）
+        self.admin_token_expire_hours = 12    # 管理员token过期时间（小时）
         
         # Token黑名单（用于登出）
         self.token_blacklist = set()
@@ -226,6 +227,81 @@ class TokenManager:
             
         except Exception as e:
             logger.error(f"获取token信息失败: {e}")
+            return None
+    
+    def generate_admin_token(self, username: str) -> str:
+        """
+        生成管理员token
+        
+        Args:
+            username: 管理员用户名
+            
+        Returns:
+            管理员token
+        """
+        try:
+            now = datetime.utcnow()
+            
+            # 管理员token payload
+            admin_payload = {
+                'username': username,
+                'role': 'admin',
+                'type': 'admin',
+                'iat': now,
+                'exp': now + timedelta(hours=self.admin_token_expire_hours)
+            }
+            
+            # 生成token
+            admin_token = jwt.encode(admin_payload, self.secret_key, algorithm=self.algorithm)
+            
+            logger.debug(f"为管理员 {username} 生成了新的token")
+            
+            return admin_token
+            
+        except Exception as e:
+            logger.error(f"生成管理员token失败: {e}")
+            raise
+    
+    def verify_admin_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        验证管理员token
+        
+        Args:
+            token: 管理员JWT token
+            
+        Returns:
+            解码后的payload，如果验证失败返回None
+        """
+        try:
+            # 检查token是否在黑名单中
+            if token in self.token_blacklist:
+                logger.warning("管理员Token已被吊销")
+                return None
+            
+            # 解码并验证token
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            
+            # 验证token类型和角色
+            if payload.get('type') != 'admin' or payload.get('role') != 'admin':
+                logger.warning(f"Token类型或角色不匹配: type={payload.get('type')}, role={payload.get('role')}")
+                return None
+            
+            # 检查是否过期
+            exp = payload.get('exp')
+            if exp and datetime.utcfromtimestamp(exp) < datetime.utcnow():
+                logger.warning("管理员Token已过期")
+                return None
+            
+            return payload
+            
+        except jwt.ExpiredSignatureError:
+            logger.warning("管理员Token已过期")
+            return None
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"无效的管理员token: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"验证管理员token失败: {e}")
             return None
 
 

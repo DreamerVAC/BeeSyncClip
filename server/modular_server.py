@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import time
 from loguru import logger
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 导入模块化组件
 from server.security import security_middleware, encryption_manager, token_manager
@@ -17,6 +17,8 @@ from server.redis_manager import redis_manager
 from server.auth import auth_manager
 from shared.models import ClipboardItem, ClipboardType
 from shared.utils import calculate_checksum
+import hashlib
+import json
 
 
 # 创建FastAPI应用
@@ -27,6 +29,13 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# 硬编码管理员配置
+ADMIN_CONFIG = {
+    "username": "admin",
+    "password": "beesync2024!",  # 生产环境应使用强密码
+    "password_hash": None  # 将在启动时生成
+}
 
 # 配置CORS
 app.add_middleware(
@@ -211,10 +220,16 @@ async def startup_event():
         logger.error("❌ Redis连接失败！")
         raise RuntimeError("Redis连接失败")
     
+    # 初始化管理员密码哈希
+    ADMIN_CONFIG["password_hash"] = hashlib.sha256(
+        ADMIN_CONFIG["password"].encode()
+    ).hexdigest()
+    
     logger.info("✅ Redis连接正常")
     logger.info("🔐 加密管理器已初始化")
     logger.info("🎫 Token管理器已初始化")
     logger.info("🛡️ 安全中间件已启用")
+    logger.info("👑 管理员账户已初始化")
     logger.info("🌐 模块化服务器启动完成")
 
 
@@ -584,6 +599,288 @@ async def add_clipboard_compat(request: dict):
         return JSONResponse(content={
             "success": False,
             "message": "添加剪切板内容过程中发生错误"
+        }, status_code=500)
+
+
+# =============================================================================
+# 管理员功能 API
+# =============================================================================
+
+def verify_admin_credentials(username: str, password: str) -> bool:
+    """验证管理员凭据"""
+    if username != ADMIN_CONFIG["username"]:
+        return False
+    
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    return password_hash == ADMIN_CONFIG["password_hash"]
+
+
+@app.post("/admin/login")
+async def admin_login(request: Request):
+    """管理员登录接口"""
+    try:
+        # 获取请求数据
+        request_data = await request.json()
+        
+        username = request_data.get('username')
+        password = request_data.get('password')
+        
+        if not username or not password:
+            return JSONResponse(content={
+                "success": False,
+                "message": "用户名和密码不能为空"
+            }, status_code=400)
+        
+        # 验证管理员凭据
+        if not verify_admin_credentials(username, password):
+            logger.warning(f"管理员登录失败: {username}")
+            return JSONResponse(content={
+                "success": False,
+                "message": "用户名或密码错误"
+            }, status_code=401)
+        
+        # 生成管理员Token
+        admin_token = token_manager.generate_admin_token(username)
+        
+        logger.info(f"管理员登录成功: {username}")
+        
+        return JSONResponse(content={
+            "success": True,
+            "message": "管理员登录成功",
+            "admin_token": admin_token,
+            "username": username,
+            "role": "admin"
+        })
+        
+    except Exception as e:
+        logger.error(f"管理员登录失败: {e}")
+        return JSONResponse(content={
+            "success": False,
+            "message": "登录过程中发生错误"
+        }, status_code=500)
+
+
+def verify_admin_token(token: str) -> bool:
+    """验证管理员Token"""
+    try:
+        payload = token_manager.verify_admin_token(token)
+        return payload is not None
+    except:
+        return False
+
+
+@app.get("/admin/users")
+async def admin_get_users(request: Request):
+    """管理员获取所有用户列表"""
+    try:
+        # 获取Authorization头中的token
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(content={
+                "success": False,
+                "message": "缺少认证token"
+            }, status_code=401)
+        
+        token = auth_header.split("Bearer ")[1]
+        
+        # 验证管理员token
+        if not verify_admin_token(token):
+            return JSONResponse(content={
+                "success": False,
+                "message": "无效的管理员token"
+            }, status_code=401)
+        
+        # 获取所有用户
+        users = redis_manager.get_all_users()
+        
+        # 格式化用户列表
+        users_list = []
+        for user in users:
+            # 获取用户的设备数量
+            devices_count = len(redis_manager.get_user_devices(user['id']))
+            
+            # 获取用户的剪贴板数量
+            clipboard_history = redis_manager.get_user_clipboard_history(user['id'], page=1, per_page=1)
+            clipboards_count = clipboard_history.total
+            
+            # 获取用户最后登录时间
+            user_devices = redis_manager.get_user_devices(user['id'])
+            last_login = None
+            if user_devices:
+                # 找到最近的登录时间
+                latest_device = max(user_devices, key=lambda d: d.get('last_seen', d.get('created_at')))
+                last_login = latest_device.get('last_seen', latest_device.get('created_at'))
+                if last_login:
+                    last_login = last_login.strftime("%Y-%m-%d %H:%M:%S")
+            
+            users_list.append({
+                "user_id": user['id'],
+                "username": user['username'],
+                "email": user.get('email', ''),
+                "created_at": user.get('created_at', '').strftime("%Y-%m-%d %H:%M:%S") if user.get('created_at') else '',
+                "last_login": last_login,
+                "devices_count": devices_count,
+                "clipboards_count": clipboards_count
+            })
+        
+        logger.info(f"管理员获取用户列表成功，共 {len(users_list)} 个用户")
+        
+        return JSONResponse(content={
+            "success": True,
+            "users": users_list,
+            "total": len(users_list)
+        })
+        
+    except Exception as e:
+        logger.error(f"管理员获取用户列表失败: {e}")
+        return JSONResponse(content={
+            "success": False,
+            "message": "获取用户列表失败"
+        }, status_code=500)
+
+
+@app.delete("/admin/users/{username}")
+async def admin_delete_user(username: str, request: Request):
+    """管理员删除用户及其所有数据"""
+    try:
+        # 获取Authorization头中的token
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(content={
+                "success": False,
+                "message": "缺少认证token"
+            }, status_code=401)
+        
+        token = auth_header.split("Bearer ")[1]
+        
+        # 验证管理员token
+        if not verify_admin_token(token):
+            return JSONResponse(content={
+                "success": False,
+                "message": "无效的管理员token"
+            }, status_code=401)
+        
+        # 检查用户是否存在
+        user = redis_manager.get_user_by_username(username)
+        if not user:
+            return JSONResponse(content={
+                "success": False,
+                "message": "用户不存在"
+            }, status_code=404)
+        
+        user_id = user['id']
+        
+        # 删除用户的所有剪贴板数据
+        clipboard_history = redis_manager.get_user_clipboard_history(user_id, page=1, per_page=10000)
+        deleted_clipboards = 0
+        for item in clipboard_history.items:
+            if redis_manager.delete_clipboard_item(user_id, item.id):
+                deleted_clipboards += 1
+        
+        # 删除用户的所有设备
+        devices = redis_manager.get_user_devices(user_id)
+        deleted_devices = 0
+        for device in devices:
+            device_id = device.get('device_id')
+            if device_id and redis_manager.remove_user_device(user_id, device_id):
+                deleted_devices += 1
+        
+        # 删除用户账户
+        if redis_manager.delete_user(user_id):
+            logger.info(f"管理员删除用户成功: {username}, 删除剪贴板: {deleted_clipboards}, 删除设备: {deleted_devices}")
+            
+            return JSONResponse(content={
+                "success": True,
+                "message": f"用户 {username} 及其所有数据已删除",
+                "deleted_clipboards": deleted_clipboards,
+                "deleted_devices": deleted_devices
+            })
+        else:
+            return JSONResponse(content={
+                "success": False,
+                "message": "删除用户失败"
+            }, status_code=500)
+        
+    except Exception as e:
+        logger.error(f"管理员删除用户失败: {e}")
+        return JSONResponse(content={
+            "success": False,
+            "message": "删除用户过程中发生错误"
+        }, status_code=500)
+
+
+@app.get("/admin/stats")
+async def admin_get_stats(request: Request):
+    """管理员获取系统统计信息"""
+    try:
+        # 获取Authorization头中的token
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(content={
+                "success": False,
+                "message": "缺少认证token"
+            }, status_code=401)
+        
+        token = auth_header.split("Bearer ")[1]
+        
+        # 验证管理员token
+        if not verify_admin_token(token):
+            return JSONResponse(content={
+                "success": False,
+                "message": "无效的管理员token"
+            }, status_code=401)
+        
+        # 获取系统统计
+        all_users = redis_manager.get_all_users()
+        total_users = len(all_users)
+        
+        total_devices = 0
+        total_clipboards = 0
+        active_users = 0
+        
+        for user in all_users:
+            user_id = user['id']
+            
+            # 统计设备数量
+            devices = redis_manager.get_user_devices(user_id)
+            total_devices += len(devices)
+            
+            # 检查是否为活跃用户（7天内有设备活动）
+            week_ago = datetime.now() - timedelta(days=7)
+            for device in devices:
+                last_seen = device.get('last_seen')
+                if last_seen and last_seen > week_ago:
+                    active_users += 1
+                    break
+            
+            # 统计剪贴板数量
+            clipboard_history = redis_manager.get_user_clipboard_history(user_id, page=1, per_page=1)
+            total_clipboards += clipboard_history.total
+        
+        # Redis状态
+        redis_info = {
+            "connected": redis_manager.is_connected(),
+            "version": "6.0+"  # 简化版本信息
+        }
+        
+        return JSONResponse(content={
+            "success": True,
+            "stats": {
+                "total_users": total_users,
+                "active_users": active_users,
+                "total_devices": total_devices,
+                "total_clipboards": total_clipboards,
+                "redis_status": redis_info,
+                "server_version": "2.0.0",
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"管理员获取统计信息失败: {e}")
+        return JSONResponse(content={
+            "success": False,
+            "message": "获取统计信息失败"
         }, status_code=500)
 
 

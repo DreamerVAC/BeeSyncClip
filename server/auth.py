@@ -75,8 +75,8 @@ class AuthManager:
                 return None
             
             # 检查用户是否已存在
-            user_key = f"user:username:{username}"
-            if redis_manager.redis_client.exists(user_key):
+            username_key = f"username:{username}"
+            if redis_manager.redis_client.exists(username_key):
                 logger.warning(f"用户已存在: {username}")
                 return redis_manager.get_user_by_username(username)  # 返回已存在的用户而不是None
             
@@ -100,7 +100,7 @@ class AuthManager:
             
             # 保存用户信息
             redis_manager.redis_client.hset(f"user:{user.id}", mapping=user_data)
-            redis_manager.redis_client.set(user_key, user.id)
+            redis_manager.redis_client.set(f"username:{username}", user.id)
             
             logger.info(f"用户注册成功: {username}")
             return user
@@ -116,8 +116,8 @@ class AuthManager:
                 return AuthResponse(success=False, message="服务器连接失败")
             
             # 查找用户
-            user_key = f"user:username:{auth_request.username}"
-            user_id = redis_manager.redis_client.get(user_key)
+            username_key = f"username:{auth_request.username}"
+            user_id = redis_manager.redis_client.get(username_key)
             
             if not user_id:
                 return AuthResponse(success=False, message="用户不存在")
@@ -250,8 +250,8 @@ class AuthManager:
                 return None
             
             # 查找用户
-            user_key = f"user:username:{username}"
-            user_id = redis_manager.redis_client.get(user_key)
+            username_key = f"username:{username}"
+            user_id = redis_manager.redis_client.get(username_key)
             
             if not user_id:
                 return None
