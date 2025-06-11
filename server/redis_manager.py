@@ -539,6 +539,19 @@ class RedisManager:
             logger.error(f"获取在线设备列表失败: {e}")
             return []
     
+    def is_device_online(self, user_id: str, device_id: str) -> bool:
+        """检查设备是否在线"""
+        try:
+            if not self.is_connected():
+                return False
+            
+            online_devices_key = f"online_devices:{user_id}"
+            return self.redis_client.sismember(online_devices_key, device_id)
+            
+        except Exception as e:
+            logger.error(f"检查设备在线状态失败: {e}")
+            return False
+    
     def get_user_by_username(self, username: str) -> Optional[dict]:
         """根据用户名获取用户信息"""
         try:
@@ -589,33 +602,59 @@ class RedisManager:
         """获取用户设备列表"""
         try:
             if not self.is_connected():
+                logger.error("Redis未连接")
                 return []
             
             devices_key = f"devices:{user_id}"
             device_ids = self.redis_client.smembers(devices_key)
+            logger.debug(f"获取用户设备列表: user_id={user_id}, device_ids={device_ids}")
             
             devices = []
             for device_id in device_ids:
                 device_key = f"device:{device_id}"
                 device_data = self.redis_client.hgetall(device_key)
+                logger.debug(f"设备数据: device_id={device_id}, data={device_data}")
                 
                 if device_data:
                     # 转换时间字段
                     from datetime import datetime
-                    device_info = {
-                        'device_id': device_id,
-                        'name': device_data.get('name', 'Unknown Device'),
-                        'os_info': device_data.get('os_info', 'Unknown'),
-                        'ip_address': device_data.get('ip_address', '0.0.0.0'),
-                        'created_at': datetime.fromisoformat(device_data.get('created_at', datetime.now().isoformat())),
-                        'last_seen': datetime.fromisoformat(device_data.get('last_seen', datetime.now().isoformat()))
-                    }
-                    devices.append(device_info)
+                    try:
+                        created_at = device_data.get('created_at')
+                        last_seen = device_data.get('last_seen')
+                        
+                        device_info = {
+                            'device_id': device_id,
+                            'name': device_data.get('name', 'Unknown Device'),
+                            'os_info': device_data.get('os_info', 'Unknown'),
+                            'ip_address': device_data.get('ip_address', '0.0.0.0'),
+                            'created_at': datetime.fromisoformat(created_at) if created_at else datetime.now(),
+                            'last_seen': datetime.fromisoformat(last_seen) if last_seen else datetime.now()
+                        }
+                        devices.append(device_info)
+                        logger.debug(f"设备信息已添加: {device_info}")
+                    except Exception as time_error:
+                        logger.error(f"时间字段解析失败: {time_error}, device_data={device_data}")
+                        # 如果时间解析失败，使用默认值
+                        device_info = {
+                            'device_id': device_id,
+                            'name': device_data.get('name', 'Unknown Device'),
+                            'os_info': device_data.get('os_info', 'Unknown'),
+                            'ip_address': device_data.get('ip_address', '0.0.0.0'),
+                            'created_at': datetime.now(),
+                            'last_seen': datetime.now()
+                        }
+                        devices.append(device_info)
+                        logger.debug(f"设备信息已添加 (默认时间): {device_info}")
+                else:
+                    logger.warning(f"设备数据为空: device_id={device_id}")
             
+            logger.debug(f"最终设备列表: {devices}")
             return devices
             
         except Exception as e:
             logger.error(f"获取用户设备列表失败: {e}")
+            import traceback
+            logger.error(f"详细错误: {traceback.format_exc()}")
             return []
     
     def update_device_name(self, device_id: str, new_name: str) -> bool:

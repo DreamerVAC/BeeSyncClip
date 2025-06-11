@@ -13,8 +13,8 @@ DEFAULT_HOST="0.0.0.0"
 show_usage() {
     echo "用法: $0 [选项]"
     echo "选项:"
-    echo "  -m, --modular        启动新模块化服务器 (推荐)"
-    echo "  -o, --original       启动原始服务器 (默认)"
+    echo "  -m, --modular        启动新模块化服务器 (默认,推荐)"
+    echo "  -o, --original       启动原始服务器"
     echo "  -d, --daemon         后台模式启动"
     echo "  -f, --foreground     前台模式启动 (默认)"
     echo "  -p, --port PORT      指定端口 (默认: 8000)"
@@ -31,10 +31,10 @@ show_usage() {
     echo "  📦 原始服务器: 传统版本，稳定运行"
     echo ""
     echo "示例:"
-    echo "  $0 -m                # 启动模块化服务器 (推荐)"
-    echo "  $0 -m -d             # 后台启动模块化服务器"
+    echo "  $0                   # 启动模块化服务器 (默认)"
+    echo "  $0 -d                # 后台启动模块化服务器"
     echo "  $0 -o                # 启动原始服务器"
-    echo "  $0 -d                # 后台启动原始服务器"
+    echo "  $0 -o -d             # 后台启动原始服务器"
     echo "  $0 -m -p 3000        # 模块化服务器，端口3000"
     echo "  $0 --port80 -m       # 模块化服务器，端口80 (需要sudo)"
     echo ""
@@ -49,7 +49,7 @@ show_usage() {
 # 解析命令行参数
 DAEMON_MODE=false
 PORT=$DEFAULT_PORT
-USE_MODULAR=false
+USE_MODULAR=true  # 默认使用模块化服务器 (推荐)
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -345,27 +345,17 @@ else
     
     if [ "$USE_MODULAR" = true ]; then
         # 启动模块化服务器
-        if [ "$PORT" -eq 8000 ]; then
-            # 直接使用模块化服务器启动脚本
-            $PYTHON_CMD start_modular_server.py
-        else
-            # 创建并使用动态启动脚本
-            STARTUP_SCRIPT=$(create_startup_script)
-            $PYTHON_CMD "$STARTUP_SCRIPT"
-            # 清理临时脚本
-            rm -f "$STARTUP_SCRIPT"
-        fi
+        # 创建并使用动态启动脚本
+        STARTUP_SCRIPT=$(create_startup_script)
+        $PYTHON_CMD "$STARTUP_SCRIPT"
+        # 清理临时脚本
+        rm -f "$STARTUP_SCRIPT"
     else
         # 启动原始服务器
-        if [ "$PORT" -eq 8000 ]; then
-            # 使用原始启动脚本
-            $PYTHON_CMD start_frontend_server.py
-        else
-            # 创建并使用动态启动脚本
-            STARTUP_SCRIPT=$(create_startup_script)
-            $PYTHON_CMD "$STARTUP_SCRIPT"
-            # 清理临时脚本
-            rm -f "$STARTUP_SCRIPT"
-        fi
+        # 创建并使用动态启动脚本
+        STARTUP_SCRIPT=$(create_startup_script)
+        $PYTHON_CMD "$STARTUP_SCRIPT"
+        # 清理临时脚本
+        rm -f "$STARTUP_SCRIPT"
     fi
 fi 

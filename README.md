@@ -17,7 +17,7 @@
   - 🔥 **模块化服务器 v2.0** (推荐): 企业级安全、性能优化、完全兼容
   - 📦 **原始服务器 v1.0**: 传统版本，稳定运行
 - 🚀 **性能优化**: 批量查询优化，解决多设备同步卡顿，性能提升20%
-- 📦 **简化部署**: 提供自动化脚本简化服务器和客户端的启动流程
+- 📦 **简化部署**: 统一的启动脚本简化服务器和客户端的启动流程
 
 ## 🚀 快速入门
 
@@ -73,11 +73,6 @@ chmod +x start_server.sh
 ./start_server.sh -o -d          # 后台启动原始服务器
 ./start_server.sh -o             # 前台启动原始服务器
 
-# 快捷启动模块化服务器
-chmod +x start_modular.sh
-./start_modular.sh -d            # 后台启动
-./start_modular.sh               # 前台启动
-
 # 查看服务状态
 ./status.sh
 
@@ -122,13 +117,14 @@ find client/ -name "*.py" -exec sed -i 's/http:\/\/47\.110\.154\.99:8000/http:\/
 
 如果您使用了非8000端口启动服务器，请确保客户端配置中的端口号与服务器启动端口一致。
 
-## 🏗️ 项目结构
+## 🏗️ 项目架构
+
+### 项目结构
 
 ```
 BeeSyncClip/
 ├── client/                   # PyQt5 GUI客户端
 │   ├── ui/                   # GUI界面模块
-│   │   └── form_ui.py        # 客户端入口
 │   └── api/                  # API客户端
 ├── server/                   # FastAPI后端服务器
 │   ├── modular_server.py     # 🔥 模块化服务器 v2.0 (推荐)
@@ -141,16 +137,78 @@ BeeSyncClip/
 │   ├── database/             # 数据库管理
 │   └── redis_manager.py      # Redis管理器
 ├── shared/                   # 共享代码和数据模型
-│   ├── models.py             # 数据模型定义
-│   └── utils.py              # 工具函数和配置管理
 ├── config/                   # 配置文件
 ├── requirements.txt          # 完整依赖列表
 ├── requirements-client.txt   # 客户端专用依赖
 ├── requirements-server.txt   # 服务器专用依赖
 ├── start_server.sh           # 统一服务器启动脚本
-├── start_modular.sh          # 模块化服务器快捷启动
-├── start_modular_server.py   # 模块化服务器启动器
 └── *.sh                      # 其他管理脚本
+```
+
+### 模块化架构 (v2.0)
+
+#### 安全功能
+- **AES-256-CBC**: 对称加密，用于数据传输加密
+- **RSA-2048**: 非对称加密，用于密钥交换
+- **PBKDF2**: 密码哈希，100,000次迭代
+- **JWT Token**: 访问令牌，24小时有效期
+- **安全中间件**: 速率限制、安全头、请求验证
+
+#### 性能优化
+- **异步处理**: FastAPI异步框架
+- **Redis缓存**: 用户会话、设备状态缓存
+- **批量查询**: 优化数据库查询性能
+- **连接池**: Redis连接复用
+
+## 🚀 脚本使用指南
+
+### 统一启动脚本 start_server.sh
+
+这是主要的服务器启动脚本，支持多种启动模式：
+
+```bash
+# 🔥 模块化服务器（推荐）
+./start_server.sh -m              # 前台启动
+./start_server.sh -m -d           # 后台启动
+
+# 📦 原始服务器
+./start_server.sh -o              # 前台启动  
+./start_server.sh -o -d           # 后台启动
+
+# 指定端口
+./start_server.sh -m -p 3000      # 模块化服务器，端口3000
+./start_server.sh -o -p 9000      # 原始服务器，端口9000
+
+# 使用80端口（需要sudo权限）
+sudo ./start_server.sh -m --port80
+```
+
+**参数说明：**
+- `-m, --modular`: 启动模块化服务器 v2.0（推荐）
+- `-o, --original`: 启动原始服务器 v1.0
+- `-d, --daemon`: 后台模式启动
+- `-f, --foreground`: 前台模式启动（默认）
+- `-p, --port PORT`: 指定端口（默认：8000）
+- `--port80`: 使用80端口启动
+
+### 其他管理脚本
+
+```bash
+# 查看服务器状态
+./status.sh
+
+# 停止服务器
+./stop_server.sh
+
+# 服务器切换
+./switch_server.sh -m    # 切换到模块化服务器
+./switch_server.sh -o    # 切换到原始服务器
+
+# API测试
+python test_api.py
+
+# 性能对比
+python compare_servers.py
 ```
 
 ## 📦 依赖说明
@@ -171,68 +229,135 @@ BeeSyncClip/
 ### 主要 API 端点
 
 #### 认证相关
-- `POST /register` - 用户注册
-- `POST /login` - 用户登录
+- `POST /auth/register` - 用户注册
+- `POST /auth/login` - 用户登录
+- `POST /auth/logout` - 用户登出
+- `POST /auth/refresh` - 刷新Token
+- `GET /auth/profile` - 获取用户信息
 
-#### 剪贴板管理 (兼容前端)
+#### 剪贴板管理
+- `GET /clipboard/history` - 获取剪贴板历史记录
+- `POST /clipboard/add` - 添加剪贴板记录
+- `GET /clipboard/latest` - 获取最新内容
+- `DELETE /clipboard/{id}` - 删除指定记录
+- `POST /clipboard/clear` - 清空剪贴板
+
+#### 设备管理
+- `GET /devices/list` - 获取设备列表
+- `PUT /devices/update-label` - 更新设备标签
+- `DELETE /devices/{id}` - 移除设备
+- `GET /devices/{id}/status` - 获取设备状态
+
+#### 兼容接口 (向后兼容)
 - `GET /get_clipboards?username={username}` - 获取用户剪贴板记录
 - `POST /add_clipboard` - 添加剪贴板记录
 - `POST /delete_clipboard` - 删除指定剪贴板记录
 - `POST /clear_clipboards` - 清空用户所有剪贴板记录
-
-#### RESTful API (认证版本)
-- `GET /clipboard/history` - 获取剪贴板历史记录 (需要认证)
-- `GET /clipboard/latest` - 获取最新剪贴板项 (需要认证)
-- `DELETE /clipboard/{item_id}` - 删除剪贴板项 (需要认证)
-- `GET /stats` - 获取用户统计信息 (需要认证)
 
 #### 系统信息
 - `GET /` - API 状态和信息
 - `GET /health` - 服务健康检查
 
 ### WebSocket 连接
-- **端点**: `ws://<server-address>:8000/ws/{user_id}/{device_id}`
+- **端点**: `ws://<server-address>:8000/ws/{user_id}/{device_id}?token={jwt_token}`
 - **用途**: 实时剪贴板同步和设备状态通信
 - **支持消息类型**: 
   - `ping/pong` - 心跳检测
   - `clipboard_sync` - 剪贴板同步
   - `request_history` - 请求历史记录
 
-## �� 开发与调试
+## 🛡️ 安全特性
 
-### 启动开发服务器 (推荐)
-```bash
-# 确保 Redis 服务正在运行
-# 启动开发服务器 (简单、适合调试)
-python start_frontend_server.py
-```
+### 数据加密流程
+1. **密钥交换**: 客户端使用服务器公钥加密会话密钥
+2. **会话建立**: 服务器解密并存储用户会话密钥
+3. **数据传输**: 使用AES-256加密所有敏感数据
+4. **完整性验证**: SHA-256校验和确保数据完整性
 
-### 生产环境测试
-```bash
-# 前台启动 (查看完整日志)
-./start_server.sh
+### 认证流程
+1. **用户注册/登录**: 密码使用PBKDF2哈希
+2. **Token生成**: 生成JWT访问令牌和刷新令牌
+3. **请求认证**: 每个API请求验证JWT令牌
+4. **权限检查**: 验证用户对资源的访问权限
 
-# 后台启动 (生产模式)
-./start_server.sh -d
-```
+### 安全防护
+- **速率限制**: 防止暴力攻击（每分钟60次请求）
+- **Token黑名单**: 支持令牌吊销
+- **安全头**: 防止XSS、CSRF等攻击
+- **输入验证**: 严格的数据验证
+- **错误处理**: 安全的错误信息返回
 
-### 启动GUI客户端进行调试
-```bash
-# 启动客户端GUI
-python client/ui/form_ui.py
+## 🚀 部署建议
 
-# 或使用脚本
-./start_client.sh              # 前台启动
-./start_client.sh --daemon     # 后台启动
+### 生产环境
+1. **HTTPS**: 启用SSL/TLS加密
+2. **防火墙**: 限制端口访问
+3. **负载均衡**: 多实例部署
+4. **监控告警**: 实时状态监控
 
-# 停止后台客户端
-./stop_client.sh
-```
+### 安全配置
+1. **环境变量**: 敏感配置外部化
+2. **密钥管理**: 定期轮换密钥
+3. **访问控制**: 限制CORS域名
+4. **日志审计**: 完整的操作日志
+
+## 🔧 故障排除
+
+### 常见问题
+
+1. **Redis连接失败**
+   ```bash
+   # 启动Redis服务
+   sudo systemctl start redis
+   ```
+
+2. **端口占用**
+   ```bash
+   # 查看端口占用
+   netstat -tuln | grep :8000
+   # 或使用其他端口
+   ./start_server.sh -m -p 9000
+   ```
+
+3. **依赖安装失败**
+   ```bash
+   # 更新pip
+   pip install --upgrade pip
+   # 重新安装依赖
+   pip install -r requirements-server.txt
+   ```
+
+## 📋 更新日志
+
+### v2.0.0 (当前版本)
+- ✅ 完整的模块化架构
+- ✅ AES-256 + RSA-2048 加密
+- ✅ JWT认证系统
+- ✅ 安全中间件
+- ✅ 性能优化
+- ✅ 统一启动脚本
+
+### v1.0.0
+- ✅ 基础剪贴板同步功能
+- ✅ PyQt5桌面客户端
+- ✅ FastAPI后端服务器
+- ✅ Redis数据存储
 
 ## 📄 许可证
 
-本项目基于 [MIT License](LICENSE) 授权。
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 🤝 贡献
+
+欢迎提交问题和拉取请求！请先阅读我们的贡献指南。
+
+## 📞 支持
+
+如果您遇到问题或有疑问，请：
+1. 查看本文档的故障排除部分
+2. 提交 GitHub Issue
+3. 查看在线API文档
 
 ---
 
-⭐ 如果这个项目对您有帮助，请给一个 **Star** 支持一下！
+🐝 **BeeSyncClip** - 让您的剪贴板在设备间自由飞翔！

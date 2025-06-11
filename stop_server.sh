@@ -53,7 +53,7 @@ echo "🔍 查找并停止所有BeeSyncClip服务器进程..."
 STOPPED_COUNT=0
 
 # 停止模块化服务器
-if pkill -f "start_modular_server.py" 2>/dev/null; then
+if pkill -f "modular_server" 2>/dev/null; then
     echo "✅ 已停止模块化服务器进程"
     STOPPED_COUNT=$((STOPPED_COUNT + 1))
 fi

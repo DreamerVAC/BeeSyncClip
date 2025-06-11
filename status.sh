@@ -25,7 +25,7 @@ echo "🌐 BeeSyncClip 服务器状态:"
 # 检测服务器类型
 detect_server_type() {
     # 检查模块化服务器
-    if pgrep -f "start_modular_server.py" > /dev/null; then
+    if pgrep -f "modular_server" > /dev/null; then
         echo "modular"
     elif pgrep -f "modular_server" > /dev/null; then
         echo "modular"

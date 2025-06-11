@@ -30,7 +30,7 @@ show_usage() {
 }
 
 detect_current_server() {
-    if pgrep -f "start_modular_server.py" > /dev/null || pgrep -f "modular_server" > /dev/null; then
+    if pgrep -f "modular_server" > /dev/null; then
         echo "modular"
     elif pgrep -f "start_frontend_server.py" > /dev/null || pgrep -f "frontend_compatible_server" > /dev/null; then
         echo "original"

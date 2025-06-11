@@ -290,12 +290,72 @@ async def login_compat(request: Request):
             device_id=auth_response.device_id
         )
         
+        # 获取用户设备列表（与1.0版本兼容）
+        user_devices = redis_manager.get_user_devices(auth_response.user_id)
+        
+        # 获取用户剪贴板历史（与1.0版本兼容）
+        clipboard_history = redis_manager.get_user_clipboard_history(
+            auth_response.user_id, page=1, per_page=50
+        )
+        
+        # 查找当前设备信息
+        current_device = None
+        for device in user_devices:
+            if device['device_id'] == device_info['device_id']:
+                current_device = {
+                    "device_id": device['device_id'],
+                    "label": device['name'],
+                    "os": device['os_info'],
+                    "ip_address": device['ip_address'],
+                    "first_login": device['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                    "last_login": device['last_seen'].strftime("%Y-%m-%d %H:%M:%S")
+                }
+                break
+        
+        # 转换设备列表格式
+        devices_list = []
+        for device in user_devices:
+            devices_list.append({
+                "device_id": device['device_id'],
+                "label": device['name'],
+                "os": device['os_info'],
+                "ip_address": device['ip_address'],
+                "first_login": device['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                "last_login": device['last_seen'].strftime("%Y-%m-%d %H:%M:%S")
+            })
+        
+        # 转换剪贴板格式
+        clipboards_list = []
+        for item in clipboard_history.items:
+            # 映射枚举类型到前端期望的content_type格式
+            content_type_map = {
+                'text': 'text/plain',
+                'image': 'image/png', 
+                'file': 'application/octet-stream',
+                'html': 'text/html',
+                'rtf': 'text/rtf'
+            }
+            content_type = content_type_map.get(item.type, 'text/plain')
+            
+            clipboards_list.append({
+                "clip_id": item.id,
+                "content": item.content,
+                "content_type": content_type,
+                "created_at": item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "last_modified": item.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "device_id": item.device_id
+            })
+        
         return JSONResponse(content={
             "success": True,
             "user_id": auth_response.user_id,
             "username": username,
             "device_id": auth_response.device_id,
             "message": "登录成功",
+            "token": tokens.get("access_token"),  # 兼容1.0版本的token字段
+            "devices": devices_list,
+            "current_device": current_device,
+            "clipboards": clipboards_list,
             **tokens,
             **session_data
         })
@@ -364,9 +424,55 @@ async def register_compat(request: Request):
 @app.get("/get_devices")
 async def get_devices_compat(request: Request):
     """兼容性获取设备接口"""
-    # 重定向到新的设备路由
-    from server.api.device_routes import get_devices
-    return await get_devices(request)
+    try:
+        # 获取username参数
+        username = request.query_params.get("username")
+        if not username:
+            return JSONResponse(content={
+                "error": "缺少username参数"
+            }, status_code=400)
+        
+        # 获取用户信息
+        user = redis_manager.get_user_by_username(username)
+        if not user:
+            return JSONResponse(content={
+                "error": "用户不存在"
+            }, status_code=404)
+        
+        user_id = user['id']
+        
+        # 获取用户设备列表
+        devices = redis_manager.get_user_devices(user_id)
+        
+        # 转换为兼容性格式（与登录接口保持一致）
+        device_list = []
+        for device in devices:
+            device_info = {
+                "device_id": device.get('device_id'),
+                "label": device.get('name'),  # 与登录接口一致
+                "os": device.get('os_info'),  # 与登录接口一致
+                "ip_address": device.get('ip_address'),  # 与登录接口一致
+                "first_login": device.get('created_at').strftime("%Y-%m-%d %H:%M:%S") if device.get('created_at') else None,
+                "last_login": device.get('last_seen').strftime("%Y-%m-%d %H:%M:%S") if device.get('last_seen') else None,
+                "is_online": redis_manager.is_device_online(user_id, device.get('device_id', ''))
+            }
+            device_list.append(device_info)
+        
+        logger.debug(f"获取设备列表成功: user={username}, count={len(device_list)}")
+        
+        return JSONResponse(content={
+            "success": True,
+            "devices": device_list,
+            "total": len(device_list)
+        })
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"获取设备列表失败: {e}")
+        logger.error(f"详细错误信息: {traceback.format_exc()}")
+        return JSONResponse(content={
+            "error": f"获取设备列表失败: {str(e)}"
+        }, status_code=500)
 
 
 @app.get("/get_clipboards")
