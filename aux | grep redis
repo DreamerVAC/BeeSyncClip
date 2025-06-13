@@ -1,0 +1,14 @@
+[0;1;32m●[0m redis-server.service - Advanced key-value store
+     Loaded: loaded (/lib/systemd/system/redis-server.service; enabled; vendor preset: enabled)
+     Active: [0;1;32mactive (running)[0m since Sat 2025-06-07 16:59:21 CST; 5 days ago
+       Docs: http://redis.io/documentation,
+             man:redis-server(1)
+   Main PID: 731 (redis-server)
+     Status: "Ready to accept connections"
+      Tasks: 5 (limit: 4098)
+     Memory: 5.8M
+        CPU: 15min 37.967s
+     CGroup: /system.slice/redis-server.service
+             └─731 "/usr/bin/redis-server 127.0.0.1:6379" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" ""
+
+Warning: some journal files were not opened due to insufficient permissions.
