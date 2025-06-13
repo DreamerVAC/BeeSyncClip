@@ -245,6 +245,7 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
             self.remove_record_item(item)
 
     def remove_record_item(self, item):
+        """删除剪贴板记录（使用DELETE /clipboard/{clip_id} API）"""
         record = item.data(QtCore.Qt.UserRole)
         record_id = record.get("clip_id")
 
@@ -253,10 +254,12 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
             return
 
         try:
-            url = f"{self.api_url.rstrip('/')}/delete_clipboard"
+            # 使用新的DELETE端点格式
+            url = f"{self.api_url.rstrip('/')}/clipboard/{record_id}"
             headers = {'Authorization': f'Bearer {self.token}'}
-            data = {"username": self.username, "clip_id": record_id}
-            response = requests.post(url, json=data, headers=headers, timeout=5)
+
+            # 发送DELETE请求（不再需要请求体）
+            response = requests.delete(url, headers=headers, timeout=5)
 
             if response.status_code == 200:
                 result = response.json()
@@ -265,10 +268,19 @@ class ClipboardDialog(QtWidgets.QDialog, Ui_Dialog):
                     self.update_status("记录已删除")
                 else:
                     self.update_status(f"删除失败: {result.get('message')}")
+            elif response.status_code == 404:
+                self.update_status("错误：记录不存在")
             else:
-                self.update_status(f"删除失败: {response.json().get('detail', '未知错误')}")
+                # 获取更详细的错误信息
+                error_detail = response.json().get('detail', '未知错误')
+                self.update_status(f"删除失败: {response.status_code} - {error_detail}")
+
+        except requests.exceptions.ConnectionError:
+            self.update_status("错误：无法连接到服务器")
+        except requests.exceptions.Timeout:
+            self.update_status("错误：请求超时，请检查网络连接")
         except Exception as e:
-            self.update_status(f"删除时出错: {e}")
+            self.update_status(f"删除时出错: {str(e)}")
 
     def load_clipboard_records(self):
         if not self.api_url or not self.token:
