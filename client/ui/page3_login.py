@@ -11,6 +11,7 @@ import uuid
 import os
 import socket
 
+
 def get_local_ip():
     """获取本机局域网IP地址"""
     s = None
@@ -28,6 +29,7 @@ def get_local_ip():
             s.close()
     return ip
 
+
 class RegisterThread(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
@@ -43,6 +45,7 @@ class RegisterThread(QThread):
             self.finished.emit(response.json())
         except Exception as e:
             self.error.emit(str(e))
+
 
 class Ui_LoginDialog(object):
     def setupUi(self, LoginDialog):
@@ -104,6 +107,10 @@ class Ui_LoginDialog(object):
         self.pushButton_register.setObjectName("pushButton_register")
         self.verticalLayout.addWidget(self.pushButton_register)
 
+        self.pushButton_admin = QtWidgets.QPushButton(LoginDialog)
+        self.pushButton_admin.setObjectName("pushButton_admin")
+        self.verticalLayout.addWidget(self.pushButton_admin)
+
         # 登录反馈标签
         self.login_feedback_label = QtWidgets.QLabel(LoginDialog)
         self.login_feedback_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -127,9 +134,12 @@ class Ui_LoginDialog(object):
         self.pushButton_login.setText(_translate("LoginDialog", "登录"))
         self.pushButton_register.setText(_translate("LoginDialog", "注册"))
         self.login_feedback_label.setText("")
+        self.pushButton_admin.setText(_translate("LoginDialog", "管理员登录"))
 
 
 class LoginDialog(QtWidgets.QDialog):
+    adminLoginRequested = pyqtSignal(str) # 添加管理员登录信号
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ui = Ui_LoginDialog()
@@ -144,6 +154,58 @@ class LoginDialog(QtWidgets.QDialog):
         # 连接按钮信号
         self.ui.pushButton_login.clicked.connect(self.on_login_clicked)
         self.ui.pushButton_register.clicked.connect(self.show_register_dialog)
+        self.ui.pushButton_admin.clicked.connect(self.on_admin_login_clicked)
+
+    def on_admin_login_clicked(self):
+        # 处理管理员登录按钮点击
+        username = self.ui.lineEdit_username.text().strip()
+        password = self.ui.lineEdit_password.text().strip()
+
+        if not username or not password:
+            QMessageBox.warning(self, "输入错误", "请输入用户名和密码")
+            return
+
+        try:
+            response = requests.post(
+                f"{self.api_url}/admin/login",
+                json={
+                    "username": username,
+                    "password": password,
+                    "is_admin": True
+                },
+                timeout=5
+            )
+            result = response.json()
+
+            if response.status_code == 200 and result.get("success"):
+                # 保存用户名和token
+                self.username = username
+                token = result.get("admin_token")
+                QMessageBox.information(self, "成功", "管理员登录成功!")
+
+                # 发射信号时传递token - 这里保持不变
+                print(f"[DEBUG] 管理员登录成功，token: {token}")
+                self.adminLoginRequested.emit(token)  # 传递token
+            else:
+                error_msg = result.get("message", "管理员登录失败")
+                QMessageBox.warning(self, "登录失败", error_msg)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"登录错误: {str(e)}")
+
+    def get_admin_token(self):
+        """返回管理员登录成功后获取的token"""
+        return self.token
+
+    """def on_admin_login_clicked(self):
+        #处理管理员登录按钮点击 - 硬编码版本
+        # 硬编码的管理员账号（不需要实际验证）
+        username = self.ui.lineEdit_username.text().strip()
+        password = self.ui.lineEdit_password.text().strip()
+
+        # 无论输入什么，都模拟管理员登录成功
+        QMessageBox.information(self, "成功", "管理员登录成功! (模拟)")
+        self.adminLoginRequested.emit()  # 发射管理员登录信号"""
 
     def show_register_dialog(self):
         """显示注册对话框"""
@@ -166,10 +228,10 @@ class LoginDialog(QtWidgets.QDialog):
         os_info = platform.system()
         os_version = platform.release()
         ip_address = get_local_ip()  # 使用新的函数获取IP
-        mac_address = ":".join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0, 8*6, 8)][::-1])
+        mac_address = ":".join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0, 8 * 6, 8)][::-1])
 
         return {
-            "device_id": self.device_id, # 使用持久化ID
+            "device_id": self.device_id,  # 使用持久化ID
             "device_name": hostname,
             "platform": os_info,
             "version": os_version,
@@ -179,18 +241,18 @@ class LoginDialog(QtWidgets.QDialog):
         }
 
     def on_login_clicked(self):
-        """处理登录按钮点击事件"""
+        """处理普通用户登录按钮点击"""
         username = self.ui.lineEdit_username.text().strip()
         password = self.ui.lineEdit_password.text().strip()
-
-        device_info = self.get_device_info()
 
         if not username or not password:
             self.ui.login_feedback_label.setText("请输入用户名和密码")
             return
 
+        device_info = self.get_device_info()
+
         try:
-            # 构造请求数据，包含设备信息
+            # 构造请求数据
             login_data = {
                 "username": username,
                 "password": password,
@@ -204,11 +266,11 @@ class LoginDialog(QtWidgets.QDialog):
             if response.status_code == 200 and result.get("success"):
                 self.username = username
                 self.device_info = result.get("current_device", {})
-                self.token = result.get("token")  # 保存token
-                self.current_username = username
-                self.devices = result.get("devices", [])
+                self.token = result.get("token")
+
+                # 普通用户登录成功
                 QMessageBox.information(self, "成功", "登录成功!")
-                self.accept()
+                self.accept()  # 发射accepted信号
             else:
                 error_msg = result.get("message", "登录失败，请检查账号和密码")
                 QMessageBox.warning(self, "登录失败", error_msg)
@@ -251,7 +313,7 @@ class LoginDialog(QtWidgets.QDialog):
                 f.write(new_device_id)
         except Exception as e:
             print(f"保存device_id失败: {e}")
-        
+
         return new_device_id
 
     def reset_state(self):
