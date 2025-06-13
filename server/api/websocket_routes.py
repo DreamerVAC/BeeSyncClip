@@ -316,7 +316,7 @@ async def handle_websocket_clipboard_sync(websocket: WebSocket, message: dict, u
                 "timestamp": clipboard_item.timestamp.isoformat()
             }
             
-            redis_manager.publish_clipboard_sync(user_id, sync_message)
+            redis_manager.publish_clipboard_sync(user_id, sync_message['action'], sync_message['data'], sync_message.get('source_device'))
             
             # 确认消息
             await websocket.send_text(json.dumps({

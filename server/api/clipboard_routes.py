@@ -111,7 +111,7 @@ async def add_clipboard(request: AddClipboardRequest, req: Request):
                 "timestamp": clipboard_item.created_at.isoformat()
             }
             
-            redis_manager.publish_clipboard_sync(user_id, sync_message)
+            redis_manager.publish_clipboard_sync(user_id, sync_message['action'], sync_message['data'], sync_message.get('source_device'))
             
             logger.info(f"剪切板内容已添加: user={username}, size={clipboard_item.size}")
             
@@ -264,7 +264,7 @@ async def delete_clipboard(clip_id: str, req: Request):
                 "timestamp": str(int(time.time()))
             }
             
-            redis_manager.publish_clipboard_sync(user_id, sync_message)
+            redis_manager.publish_clipboard_sync(user_id, sync_message['action'], sync_message['data'], sync_message.get('source_device'))
             
             logger.info(f"剪切板内容已删除: user={username}, clip_id={clip_id}")
             
@@ -304,7 +304,7 @@ async def clear_clipboards(req: Request):
                 "timestamp": str(int(time.time()))
             }
             
-            redis_manager.publish_clipboard_sync(user_id, sync_message)
+            redis_manager.publish_clipboard_sync(user_id, sync_message['action'], sync_message['data'], sync_message.get('source_device'))
             
             logger.info(f"剪切板已清空: user={username}")
             
