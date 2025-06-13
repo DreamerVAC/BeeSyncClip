@@ -51,6 +51,18 @@ fi
 
 echo "✅ 依赖检查通过"
 
+# 检查 Python 版本
+echo "🔍 检查 Python 版本..."
+PYTHON_VERSION=$(python3 -c 'import sys; print("{}.{}.{}".format(*sys.version_info[:3]))')
+REQUIRED_MAJOR=3
+REQUIRED_MINOR=11
+if python3 -c 'import sys; exit(not (sys.version_info[:2] >= (3,11)))'; then
+    echo "✅ Python 版本满足要求: $PYTHON_VERSION (>=3.11)"
+else
+    echo "❌ 检测到 Python 版本为 $PYTHON_VERSION，建议使用 Python 3.11 及以上版本！"
+    echo "   请升级本地 Python 以获得最佳兼容性。"
+fi
+
 # 后台模式下检查是否已经在运行
 if [ "$DAEMON_MODE" = true ]; then
     if [ -f "$PID_FILE" ]; then

@@ -199,6 +199,16 @@ else
     fi
 fi
 
+# 检查 Python 版本
+echo "🔍 检查 Python 版本..."
+PYTHON_VERSION=$($PYTHON_CMD -c 'import sys; print("{}.{}.{}".format(*sys.version_info[:3]))')
+if $PYTHON_CMD -c 'import sys; exit(not (sys.version_info[:2] >= (3,11)))'; then
+    echo "✅ Python 版本满足要求: $PYTHON_VERSION (>=3.11)"
+else
+    echo "❌ 检测到 Python 版本为 $PYTHON_VERSION，建议使用 Python 3.11 及以上版本！"
+    echo "   请升级本地 Python 以获得最佳兼容性。"
+fi
+
 # 创建动态启动脚本
 create_startup_script() {
     local temp_script="/tmp/start_beesyncclip_${PORT}.py"
