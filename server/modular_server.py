@@ -698,11 +698,9 @@ async def admin_get_users(request: Request):
         for user in users:
             # 获取用户的设备数量
             devices_count = len(redis_manager.get_user_devices(user['id']))
-            
             # 获取用户的剪贴板数量
             clipboard_history = redis_manager.get_user_clipboard_history(user['id'], page=1, per_page=1)
             clipboards_count = clipboard_history.total
-            
             # 获取用户最后登录时间
             user_devices = redis_manager.get_user_devices(user['id'])
             last_login = None
@@ -711,26 +709,22 @@ async def admin_get_users(request: Request):
                 latest_device = max(user_devices, key=lambda d: d.get('last_seen', d.get('created_at')))
                 last_login = latest_device.get('last_seen', latest_device.get('created_at'))
                 if last_login:
-                    last_login = last_login.strftime("%Y-%m-%d %H:%M:%S")
-            
+                    last_login = str(last_login)
             users_list.append({
                 "user_id": user['id'],
                 "username": user['username'],
                 "email": user.get('email', ''),
-                "created_at": user.get('created_at', '').strftime("%Y-%m-%d %H:%M:%S") if user.get('created_at') else '',
-                "last_login": last_login,
+                "created_at": str(user.get('created_at', '')),
+                "last_login": last_login or '',
                 "devices_count": devices_count,
                 "clipboards_count": clipboards_count
             })
-        
         logger.info(f"管理员获取用户列表成功，共 {len(users_list)} 个用户")
-        
         return JSONResponse(content={
             "success": True,
             "users": users_list,
             "total": len(users_list)
         })
-        
     except Exception as e:
         logger.error(f"管理员获取用户列表失败: {e}")
         return JSONResponse(content={
@@ -739,9 +733,9 @@ async def admin_get_users(request: Request):
         }, status_code=500)
 
 
-@app.delete("/admin/users/{username}")
-async def admin_delete_user(username: str, request: Request):
-    """管理员删除用户及其所有数据"""
+@app.delete("/admin/users/{user_key}")
+async def admin_delete_user(user_key: str, request: Request):
+    """管理员删除用户及其所有数据，支持user_id或username"""
     try:
         # 获取Authorization头中的token
         auth_header = request.headers.get("Authorization")
@@ -760,21 +754,24 @@ async def admin_delete_user(username: str, request: Request):
                 "message": "无效的管理员token"
             }, status_code=401)
         
-        # 检查用户是否存在
-        user = redis_manager.get_user_by_username(username)
+        # 先尝试用user_id查找
+        user = redis_manager.get_user_by_id(user_key) if hasattr(redis_manager, 'get_user_by_id') else None
+        if not user:
+            # 再用username查找
+            user = redis_manager.get_user_by_username(user_key)
         if not user:
             return JSONResponse(content={
                 "success": False,
                 "message": "用户不存在"
             }, status_code=404)
-        
         user_id = user['id']
+        username = user.get('username', user_key)
         
         # 删除用户的所有剪贴板数据
         clipboard_history = redis_manager.get_user_clipboard_history(user_id, page=1, per_page=10000)
         deleted_clipboards = 0
         for item in clipboard_history.items:
-            if redis_manager.delete_clipboard_item(user_id, item.id):
+            if redis_manager.delete_clipboard_item(item.id):
                 deleted_clipboards += 1
         
         # 删除用户的所有设备
@@ -788,7 +785,6 @@ async def admin_delete_user(username: str, request: Request):
         # 删除用户账户
         if redis_manager.delete_user(user_id):
             logger.info(f"管理员删除用户成功: {username}, 删除剪贴板: {deleted_clipboards}, 删除设备: {deleted_devices}")
-            
             return JSONResponse(content={
                 "success": True,
                 "message": f"用户 {username} 及其所有数据已删除",
@@ -800,7 +796,6 @@ async def admin_delete_user(username: str, request: Request):
                 "success": False,
                 "message": "删除用户失败"
             }, status_code=500)
-        
     except Exception as e:
         logger.error(f"管理员删除用户失败: {e}")
         return JSONResponse(content={

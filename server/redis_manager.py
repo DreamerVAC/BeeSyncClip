@@ -972,6 +972,10 @@ class RedisManager:
             logger.error(f"移除用户设备失败: {e}")
             return False
 
+    def get_user_by_id(self, user_id: str):
+        user_key = f"user:{user_id}"
+        return self.redis_client.hgetall(user_key)
+
 
 # 全局 Redis 管理器实例
 redis_manager = RedisManager() 
