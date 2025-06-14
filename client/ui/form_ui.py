@@ -101,7 +101,7 @@ class Ui_app_ui(object):
         self.emoji_label = QtWidgets.QLabel()
         self.emoji_label.setAlignment(QtCore.Qt.AlignCenter)
         self.emoji_label.setStyleSheet("QLabel { font-size: 100px; }")
-        self.emoji_label.setText("🐝🐝")
+        self.emoji_label.setText("🐝")
 
         self.welcome_label = QtWidgets.QLabel("欢迎使用 BeeSyncClip")
         self.welcome_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -328,9 +328,9 @@ class MainWindow(QtWidgets.QWidget):
 
     def on_admin_login_success(self, token):
         """管理员登录成功处理"""
-        print(f"[MAIN_WINDOW] 收到管理员Token: {token}")
+        #print(f"[MAIN_WINDOW] 收到管理员Token: {token}")
         self.admin_token = token  # 保存token
-        print(f"[MAIN_WINDOW] 创建AdministratorDialog，传入Token: {token}")
+        #print(f"[MAIN_WINDOW] 创建AdministratorDialog，传入Token: {token}")
 
         # 如果已有管理员对话框，先清除
         if hasattr(self.ui, 'admin_dialog') and self.ui.admin_dialog:
