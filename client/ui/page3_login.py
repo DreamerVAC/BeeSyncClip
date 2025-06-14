@@ -184,7 +184,7 @@ class LoginDialog(QtWidgets.QDialog):
                 QMessageBox.information(self, "成功", "管理员登录成功!")
 
                 # 发射信号时传递token - 这里保持不变
-                print(f"[DEBUG] 管理员登录成功，token: {token}")
+                #print(f"[DEBUG] 管理员登录成功，token: {token}")
                 self.adminLoginRequested.emit(token)  # 传递token
             else:
                 error_msg = result.get("message", "管理员登录失败")
