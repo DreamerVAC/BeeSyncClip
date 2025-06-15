@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from page1_clipboard import Ui_Dialog, ClipboardDialog
-from page2_device import DeviceDialog
-from page3_login import LoginDialog
-from page5_userinfo import UserInfoDialog
-from page6_adminitrator import AdministratorDialog  # 保留管理员功能
+from client.ui.page1_clipboard import Ui_Dialog, ClipboardDialog
+from client.ui.page2_device import DeviceDialog
+from client.ui.page3_login import LoginDialog
+from client.ui.page5_userinfo import UserInfoDialog
+from client.ui.page6_adminitrator import AdministratorDialog  # 保留管理员功能
 
 
 class Ui_app_ui(object):

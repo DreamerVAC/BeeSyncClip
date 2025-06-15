@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from page4_register import Ui_RegisterDialog  # 导入注册页面的UI类
+from client.ui.page4_register import Ui_RegisterDialog  # 导入注册页面的UI类
 import requests
 import json
 from PyQt5.QtWidgets import QMessageBox
